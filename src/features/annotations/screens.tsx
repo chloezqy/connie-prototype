@@ -263,10 +263,13 @@ export function AnnotationsScreen() {
         /* keep baked callouts on error */
       })
   }, [])
-  const annBoth = annById['verified_by_both']
-  const annComm = annById['verified_by_community_only']
-  const annMis = annById['misleading']
-  const annUnv = annById['unverifiable']
+  // Only use a live annotation if it still has valid evidence after filtering youtube/competitors;
+  // otherwise fall back to the designed (evidenced) callout — never show an evidence-less claim.
+  const valid = (a?: InlineAnnotation) => (a && cleanEvidence(a.evidence).length > 0 ? a : undefined)
+  const annBoth = valid(annById['verified_by_both'])
+  const annComm = valid(annById['verified_by_community_only'])
+  const annMis = valid(annById['misleading'])
+  const annUnv = annById['unverifiable'] // unverifiable is evidence-free by design
 
   return (
     <FigmaFrame backdrop={asset.backdrop} backdropOpacity={state === 'base' ? 1 : 0.7}>

@@ -213,10 +213,12 @@ const COMMUNITY_AVATAR: Record<CommunitySource, string> = {
  * always comes first; community posts are authored samples (see mocks/communityPosts.ts).
  */
 function insightsToRows(payload: ProductInsightsPayload, connectedSources: string[]): RowData[] {
-  return payload.insights.map((ins) => {
-    const meta = CATEGORY_ICON[ins.category] ?? { icon: `${A}toprated.svg`, size: 20 }
-    // Drop youtube + direct competitors (Wirecutter, BabyGearLab, ...) from displayed evidence.
-    const evidence = cleanEvidence(ins.evidence ?? [])
+  return payload.insights
+    // Never show an insight whose real evidence is entirely youtube/competitors — no unbacked claims.
+    .filter((ins) => cleanEvidence(ins.evidence ?? []).length > 0)
+    .map((ins) => {
+      const meta = CATEGORY_ICON[ins.category] ?? { icon: `${A}toprated.svg`, size: 20 }
+      const evidence = cleanEvidence(ins.evidence ?? [])
     const realDetail = evidence.map((e) => ({
       source: e.source_name,
       text: e.quote,
@@ -752,7 +754,7 @@ export function ProductInsightsScreen() {
         /* keep baked rows on error */
       })
   }, [])
-  const panelRows = liveRows ?? rows
+  const panelRows = liveRows && liveRows.length > 0 ? liveRows : rows
 
   const frame: ReactNode = (
     <FigmaFrame backdrop={bg} backdropOpacity={0.7}>
