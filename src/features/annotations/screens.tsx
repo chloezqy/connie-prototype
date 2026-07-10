@@ -6,6 +6,7 @@ import { CRLauncher } from '@/components/connie/CRLauncher'
 import { cn } from '@/lib/cn'
 import { callConnie } from '@/api/connieClient'
 import { isInlineAnnotations, type Evidence, type InlineAnnotation } from '@/types/connie-contract'
+import { cleanEvidence } from '@/lib/sourceFilter'
 
 /* ---------- Annotation asset paths (public/figma) ---------- */
 const asset = {
@@ -210,8 +211,8 @@ const SOURCE_LABEL: Record<string, string> = {
 
 /** Renders a live annotation's evidence as source cards (falls back to nothing if empty). */
 function LiveSources({ evidence }: { evidence: Evidence[] }) {
-  // Drop youtube — not a real retrieval source, so never display it.
-  const shown = evidence.filter((e) => e.source_type !== 'youtube')
+  // Drop youtube + direct competitors (Wirecutter, BabyGearLab, ...) from displayed evidence.
+  const shown = cleanEvidence(evidence)
   if (shown.length === 0) return null
   return (
     <SourceRow>

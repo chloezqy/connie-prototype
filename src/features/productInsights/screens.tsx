@@ -6,6 +6,7 @@ import { callConnie } from '@/api/connieClient'
 import { isProductInsights, type ProductInsightsPayload } from '@/types/connie-contract'
 import { usePreferences, preferencesToPriorities } from '@/store/usePreferences'
 import { communityPosts, type CommunitySource } from '@/mocks/communityPosts'
+import { cleanEvidence } from '@/lib/sourceFilter'
 
 /** The product this "page" is about — drives the live product_insights request. */
 const LIVE_PRODUCT = 'UPPAbaby Vista V2'
@@ -214,8 +215,8 @@ const COMMUNITY_AVATAR: Record<CommunitySource, string> = {
 function insightsToRows(payload: ProductInsightsPayload, connectedSources: string[]): RowData[] {
   return payload.insights.map((ins) => {
     const meta = CATEGORY_ICON[ins.category] ?? { icon: `${A}toprated.svg`, size: 20 }
-    // Drop any youtube evidence — not a real retrieval source, so never display it.
-    const evidence = (ins.evidence ?? []).filter((e) => e.source_type !== 'youtube')
+    // Drop youtube + direct competitors (Wirecutter, BabyGearLab, ...) from displayed evidence.
+    const evidence = cleanEvidence(ins.evidence ?? [])
     const realDetail = evidence.map((e) => ({
       source: e.source_name,
       text: e.quote,
