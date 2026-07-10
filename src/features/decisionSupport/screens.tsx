@@ -839,6 +839,26 @@ function DeepDiveRow({ row, first, last }: { row: DetailRow; first: boolean; las
             <p className="text-[14px] leading-[20px] text-[#282923]">{row.subtitle}</p>
           </div>
         </div>
+        {row.sources && row.sources.length > 0 && (
+          <div className="flex shrink-0 items-center gap-[4px] pr-[4px]">
+            <div className="flex">
+              {row.sources.slice(0, 2).map((s, i) => (
+                <img
+                  key={i}
+                  src={s.avatar}
+                  alt=""
+                  className="size-[20px] rounded-full border-[0.5px] border-white object-cover"
+                  style={{ marginLeft: i === 0 ? 0 : -8 }}
+                />
+              ))}
+            </div>
+            {row.sources.length > 2 && (
+              <span className="whitespace-nowrap text-[12px] font-semibold leading-[16px] text-fg-secondary">
+                +{row.sources.length - 2}
+              </span>
+            )}
+          </div>
+        )}
         <button
           onClick={() => setOpen((o) => !o)}
           aria-label="Toggle"
