@@ -2,7 +2,7 @@ import { useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { FigmaFrame } from '@/layouts/FigmaFrame'
-import { CRLauncher } from '@/components/connie/CRLauncher'
+import { NaviRail } from '@/components/connie/NaviRail'
 import { IconX, IconCheck, IconInfo, IconStar, IconShare, IconCaretLeft, IconCaretRight } from '@/components/icons'
 import { routes } from '@/app/routes'
 import { useJourneyStore } from '@/store/useJourneyStore'
@@ -84,7 +84,7 @@ function PrimaryButton({
     <button
       onClick={onClick}
       disabled={disabled}
-      className={`flex h-[48px] w-full items-center justify-center rounded-pill text-body font-semibold text-fg-inverse ${
+      className={`flex h-[48px] w-full shrink-0 items-center justify-center rounded-pill text-body font-semibold text-fg-inverse ${
         disabled ? 'bg-bg-disabled' : 'bg-brand'
       }`}
     >
@@ -290,7 +290,7 @@ export function WelcomeScreen() {
         </button>
       </div>
 
-      <CRLauncher style={{ left: 52, top: 792 }} />
+      <NaviRail />
     </FigmaFrame>
   )
 }
@@ -314,7 +314,14 @@ export function MemberCheckScreen() {
         </p>
         <div className="flex w-full flex-col gap-[12px]">
           <PrimaryButton onClick={() => navigate(routes.login)}>Log in to CR</PrimaryButton>
-          <OutlineButton onClick={() => navigate(routes.login)}>Create account</OutlineButton>
+          <OutlineButton
+            onClick={() => {
+              setMember(true)
+              navigate(routes.promise)
+            }}
+          >
+            Create account
+          </OutlineButton>
           <button
             onClick={() => {
               setMember(false)
@@ -326,7 +333,7 @@ export function MemberCheckScreen() {
           </button>
         </div>
       </Panel>
-      <CRLauncher style={{ left: 52, top: 792 }} />
+      <NaviRail />
     </FigmaFrame>
   )
 }
@@ -405,6 +412,7 @@ export function LoginScreen() {
         </PrimaryButton>
         <OutlineButton onClick={() => navigate(routes.promise)}>Continue with Google</OutlineButton>
       </Panel>
+      <NaviRail />
     </FigmaFrame>
   )
 }
@@ -432,7 +440,7 @@ export function PromiseScreen() {
         <CloseX onClick={() => navigate('/')} />
         <div className="flex w-full flex-col gap-[8px]">
           <p className="text-eyebrow font-semibold uppercase text-fg-brand">A QUICK PROMISE</p>
-          <p className="text-title1 font-semibold text-fg-primary">Three promises from us to you.</p>
+          <p className="text-title1 font-semibold text-fg-primary">Three promises from CR to you.</p>
         </div>
         <div className="flex w-full flex-col gap-[12px]">
           <PromiseCard
@@ -453,7 +461,7 @@ export function PromiseScreen() {
         </div>
         <PrimaryButton onClick={() => navigate(routes.surveyCommunities)}>Got it</PrimaryButton>
       </Panel>
-      <CRLauncher style={{ left: 52, top: 792 }} />
+      <NaviRail />
     </FigmaFrame>
   )
 }
@@ -491,8 +499,8 @@ export function SurveyCommunitiesScreen() {
               <button
                 key={c.name}
                 onClick={() => toggle(c.name)}
-                className={`flex items-center justify-center gap-[8px] overflow-clip rounded-pill border bg-bg-primary px-[18px] py-[11px] ${
-                  selected.includes(c.name) ? 'border-border-black' : 'border-border-subtle'
+                className={`flex items-center justify-center gap-[8px] overflow-clip rounded-pill bg-bg-primary px-[18px] py-[11px] ${
+                  selected.includes(c.name) ? 'border-2 border-border-black' : 'border border-border-subtle'
                 }`}
               >
                 <img
@@ -509,7 +517,7 @@ export function SurveyCommunitiesScreen() {
           Next
         </PrimaryButton>
       </Panel>
-      <CRLauncher style={{ left: 52, top: 792 }} />
+      <NaviRail />
     </FigmaFrame>
   )
 }
@@ -568,7 +576,7 @@ export function SurveyPrioritiesScreen() {
         </div>
         <PrimaryButton onClick={() => navigate(routes.permissions)}>Next</PrimaryButton>
       </Panel>
-      <CRLauncher style={{ left: 52, top: 792 }} />
+      <NaviRail />
     </FigmaFrame>
   )
 }
@@ -600,7 +608,8 @@ function PermRow({ icon, title, body }: { icon: string; title: string; body: str
 export function PermissionsScreen() {
   const navigate = useNavigate()
   const grant = useJourneyStore((s) => s.grantPermissions)
-  const [where, setWhere] = useState<'all' | 'manual'>('all')
+  const [allTabs, setAllTabs] = useState(true)
+  const [manual, setManual] = useState(false)
   return (
     <FigmaFrame backdrop={onboardingGoogleBg}>
       <div
@@ -652,7 +661,7 @@ export function PermissionsScreen() {
           </p>
           <div className="flex w-full flex-col overflow-clip rounded-md border-[1.5px] border-border-subtle bg-white">
             <button
-              onClick={() => setWhere('all')}
+              onClick={() => setAllTabs((v) => !v)}
               className="flex w-full items-center gap-[12px] overflow-clip px-[18px] py-[15px] text-left"
             >
               <div className="flex flex-1 flex-col gap-[2px] text-body leading-[24px]">
@@ -661,18 +670,18 @@ export function PermissionsScreen() {
                   Retailers, search, reviews & AI chats; anywhere you shop or research
                 </p>
               </div>
-              <Toggle on={where === 'all'} />
+              <Toggle on={allTabs} />
             </button>
             <div className="h-[1.5px] w-full bg-border-subtle" />
             <button
-              onClick={() => setWhere('manual')}
+              onClick={() => setManual((v) => !v)}
               className="flex w-full items-center gap-[12px] overflow-clip px-[18px] py-[15px] text-left"
             >
               <div className="flex flex-1 flex-col gap-[2px] text-body leading-[24px]">
                 <p className="font-semibold text-fg-primary">Only when I open it</p>
                 <p className="text-fg-secondary">Manual, Connie stays idle until you click it</p>
               </div>
-              <Toggle on={where === 'manual'} />
+              <Toggle on={manual} />
             </button>
           </div>
         </div>
@@ -686,7 +695,7 @@ export function PermissionsScreen() {
           Allow &amp; continue
         </PrimaryButton>
       </div>
-      <CRLauncher style={{ left: 52, top: 792 }} />
+      <NaviRail />
     </FigmaFrame>
   )
 }
@@ -697,7 +706,7 @@ export function DoneScreen() {
   const complete = useJourneyStore((s) => s.completeOnboarding)
   const finish = () => {
     complete()
-    navigate(routes.insights)
+    navigate('/browse/tour')
   }
   return (
     <FigmaFrame backdrop={onboardingGoogleBg}>
@@ -723,7 +732,7 @@ export function DoneScreen() {
         <span className="whitespace-nowrap text-title4 font-semibold text-fg-secondary">Amazon</span>
       </button>
 
-      <CRLauncher style={{ left: 52, top: 792 }} />
+      <NaviRail />
     </FigmaFrame>
   )
 }

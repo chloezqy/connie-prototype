@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { FigmaFrame } from '@/layouts/FigmaFrame'
 import { CRLauncher } from '@/components/connie/CRLauncher'
+import { NaviRail } from '@/components/connie/NaviRail'
+import { routes } from '@/app/routes'
 import { cn } from '@/lib/cn'
 import { callConnie } from '@/api/connieClient'
 import { isInlineAnnotations, type Evidence, type InlineAnnotation } from '@/types/connie-contract'
@@ -38,28 +40,6 @@ const STATE_ORDER: { key: StateKey; short: string }[] = [
 ]
 
 /* ---------- Retailer-page chrome (persists across all states) ---------- */
-
-/** Connie Navi bar — collapsed icon rail. Absolute left 51 / top 523 (Figma 1052:5191). */
-function NaviBar() {
-  return (
-    <div
-      className="absolute flex items-center rounded-[8px] border-[0.5px] border-border-subtle bg-white p-[10px] drop-shadow-[0px_0px_7.5px_rgba(5,5,0,0.16)]"
-      style={{ left: 51, top: 523 }}
-    >
-      <div className="flex flex-col items-start gap-[16px]">
-        <div className="flex flex-col items-start gap-[16px]">
-          <img alt="" src={asset.naviChat} className="size-[40px]" />
-          <img alt="" src={asset.naviHeart} className="size-[40px]" />
-        </div>
-        <div className="h-[2px] w-[40px] bg-[#e1e1e1]" />
-        <div className="flex flex-col items-start gap-[16px]">
-          <img alt="" src={asset.naviGear} className="size-[40px]" />
-          <img alt="" src={asset.naviQuestion} className="size-[40px]" />
-        </div>
-      </div>
-    </div>
-  )
-}
 
 /** A highlighted claim swatch drawn over the retailer page. */
 function Highlight({
@@ -242,6 +222,16 @@ export function AnnotationsScreen() {
     setParams(next, { replace: true })
   }
 
+  // Intro tooltip — shown once when arriving from the Product Insights page, before the callouts.
+  const [intro, setIntro] = useState(params.get('intro') === '1')
+  const dismissIntro = () => {
+    setIntro(false)
+    const next = new URLSearchParams(params)
+    next.delete('intro')
+    next.set('state', 'base')
+    setParams(next, { replace: true })
+  }
+
   // Fetch live inline annotations once; index them by verdict so each callout can use its own.
   const [annById, setAnnById] = useState<Record<string, InlineAnnotation>>({})
   const didFetch = useRef(false)
@@ -264,6 +254,65 @@ export function AnnotationsScreen() {
   const annComm = annById['verified_by_community_only']
   const annMis = annById['misleading']
   const annUnv = annById['unverifiable']
+
+  /* ---- Intro coach mark (arrives from Product Insights via ?intro=1) ---- */
+  if (intro) {
+    return (
+      <FigmaFrame backdrop={asset.backdrop} backdropOpacity={0.4}>
+        {/* Highlighted claim the user "pointed to" */}
+        <div
+          className="absolute rounded-[4px]"
+          style={{ left: 597, top: 569, width: 248, height: 21, opacity: 0.3, background: '#ae0d00' }}
+        />
+        <div
+          className="absolute rounded-[4px]"
+          style={{ left: 579, top: 565, width: 276, height: 30, border: '2.5px solid #050500' }}
+        />
+
+        {/* Dark tooltip bubble + arrow pointing right toward the highlight */}
+        <div className="absolute flex items-center" style={{ left: 154, top: 480 }}>
+          <div
+            className="flex w-[397px] flex-col items-start gap-[18px] overflow-clip rounded-[16px] bg-fg-primary p-[28px]"
+            style={{ boxShadow: '0px 10px 28px 0px rgba(0,0,0,0.22)' }}
+          >
+            <div className="flex items-start rounded-[999px] bg-bg-primary px-[12px] py-[5px]">
+              <p className="whitespace-nowrap text-[12px] font-semibold leading-[16px] text-fg-primary">
+                INLINE ANNOTATION
+              </p>
+            </div>
+            <p className="text-[16px] font-normal leading-[24px] text-fg-inverse">
+              Highlight anything you're unsure about. Connie only checks what you point to and searches
+              CR's tests and community live, so the colored flags appear right after you highlight.
+            </p>
+          </div>
+          <div
+            style={{
+              width: 0,
+              height: 0,
+              borderTop: '16px solid transparent',
+              borderBottom: '16px solid transparent',
+              borderLeft: '14px solid #050500',
+            }}
+          />
+        </div>
+
+        {/* Got it pill */}
+        <div
+          className="absolute flex w-[143px] items-center overflow-clip rounded-[999px] bg-white px-[22px] py-[12px]"
+          style={{ left: 647, top: 794, boxShadow: '0px 8px 24px 0px rgba(0,0,0,0.14)' }}
+        >
+          <button
+            onClick={dismissIntro}
+            className="flex h-[48px] flex-1 items-center justify-center rounded-[48px] bg-brand text-[16px] font-semibold text-fg-inverse"
+          >
+            Got it ✓
+          </button>
+        </div>
+
+        <NaviRail />
+      </FigmaFrame>
+    )
+  }
 
   return (
     <FigmaFrame backdrop={asset.backdrop} backdropOpacity={state === 'base' ? 1 : 0.7}>
@@ -402,8 +451,7 @@ export function AnnotationsScreen() {
         </Callout>
       )}
 
-      <NaviBar />
-      <CRLauncher style={{ left: 52, top: 792 }} />
+      <NaviRail />
 
       {/* Dev control — switch between the five states (not part of the Figma frame) */}
       <div className="fixed bottom-3 left-1/2 z-50 flex -translate-x-1/2 gap-[4px] rounded-pill border border-border-subtle bg-white/95 p-[4px] shadow-panel backdrop-blur">

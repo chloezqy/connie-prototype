@@ -79,6 +79,19 @@ export const IconBookmark = ({ size = 20, ...p }: IconProps) => (
   </svg>
 )
 
+export const IconHeart = ({ size = 20, ...p }: IconProps) => (
+  <svg {...base(size)} {...p}>
+    <path d="M20.8 6.6a5 5 0 0 0-7.1 0L12 8.3l-1.7-1.7a5 5 0 1 0-7.1 7.1L12 21l8.8-7.3a5 5 0 0 0 0-7.1z" />
+  </svg>
+)
+
+export const IconHelp = ({ size = 20, ...p }: IconProps) => (
+  <svg {...base(size)} {...p}>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01" />
+  </svg>
+)
+
 export const IconShare = ({ size = 20, ...p }: IconProps) => (
   <svg {...base(size)} {...p}>
     <path d="M12 15V4M8 8l4-4 4 4" />

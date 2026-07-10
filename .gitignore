@@ -10,6 +10,9 @@ dist-ssr
 .env.local
 .env.*.local
 
+# CR proprietary data (uploaded into Langflow, never committed)
+backend-data/
+
 # editor / OS
 .DS_Store
 *.log

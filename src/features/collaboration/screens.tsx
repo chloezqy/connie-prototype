@@ -1,8 +1,10 @@
+import { useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { FigmaFrame } from '@/layouts/FigmaFrame'
 import { routes } from '@/app/routes'
 import { useCollabStore } from '@/store/useCollabStore'
+import { NaviRail } from '@/components/connie/NaviRail'
 
 /* ---------- Collaboration asset paths (public/figma, prefix collab-) ---------- */
 const A = {
@@ -39,28 +41,6 @@ type Stage = 'confirm' | 'share' | 'add' | 'permissions' | 'shared'
 
 /* ---------- Shared primitives ---------- */
 
-/** Floating Navi bar — 4 icons + divider, at left 52 / top 524 (Figma 1052:5191). */
-function NaviBar() {
-  return (
-    <div
-      className="absolute flex items-center rounded-[8px] border-[0.5px] border-border-subtle bg-white p-[10px] drop-shadow-[0px_0px_7.5px_rgba(5,5,0,0.16)]"
-      style={{ left: 52, top: 524 }}
-    >
-      <div className="flex flex-col items-start gap-[16px]">
-        <div className="flex flex-col items-start gap-[16px]">
-          <img alt="" src={A.naviChat} className="size-[40px]" />
-          <img alt="" src={A.naviHeart} className="size-[40px]" />
-        </div>
-        <div className="h-px w-full bg-border-subtle" />
-        <div className="flex flex-col items-start gap-[16px]">
-          <img alt="" src={A.naviGear} className="size-[40px]" />
-          <img alt="" src={A.naviQuestion} className="size-[40px]" />
-        </div>
-      </div>
-    </div>
-  )
-}
-
 /** Connie panel — absolute 520px card at left 864 / top 72 (Figma). */
 function Panel({
   bg,
@@ -91,12 +71,24 @@ function CloseX({ onClick }: { onClick: () => void }) {
   )
 }
 
-/** On-state pill toggle, 64×32 (all frames show it enabled). */
-function ToggleOn() {
+/** Pill toggle, 64×32 — clickable, defaults on. */
+function Toggle({ defaultOn = true }: { defaultOn?: boolean }) {
+  const [on, setOn] = useState(defaultOn)
   return (
-    <div className="relative h-[32px] w-[64px] shrink-0 rounded-full bg-brand">
-      <span className="absolute left-[36px] top-[4px] size-[24px] rounded-full bg-white shadow-sm" />
-    </div>
+    <button
+      type="button"
+      aria-pressed={on}
+      onClick={() => setOn((v) => !v)}
+      className={`relative h-[32px] w-[64px] shrink-0 rounded-full transition-colors ${
+        on ? 'bg-brand' : 'bg-bg-disabled'
+      }`}
+    >
+      <span
+        className={`absolute top-[4px] size-[24px] rounded-full bg-white shadow-sm transition-all ${
+          on ? 'left-[36px]' : 'left-[4px]'
+        }`}
+      />
+    </button>
   )
 }
 
@@ -187,11 +179,7 @@ function ProductCard({
         View Full Review
       </button>
 
-      {showComment && (
-        <div className="flex h-[84px] w-full flex-col items-start overflow-clip rounded-sm border border-border-strong bg-bg-primary px-[16px] py-[14px]">
-          <p className="w-full text-body text-fg-secondary">Add your comments...</p>
-        </div>
-      )}
+      {showComment && <CommentField placeholder="Add your comments..." />}
     </div>
   )
 }
@@ -287,40 +275,62 @@ function ShareWithField({ onClick }: { onClick: () => void }) {
   )
 }
 
-function PermSelect({ onClick, open }: { onClick: () => void; open: boolean }) {
+const PERM_OPTIONS = [
+  { value: 'Can view', icon: A.eye },
+  { value: 'Can comment', icon: A.chat },
+  { value: 'Can edit', icon: A.pencil },
+]
+
+/** Self-contained permission select — opens on click, picking an option collapses it. */
+function PermSelect({ defaultOpen = false }: { defaultOpen?: boolean }) {
+  const [open, setOpen] = useState(defaultOpen)
+  const [value, setValue] = useState('Can comment')
+  const current = PERM_OPTIONS.find((o) => o.value === value) ?? PERM_OPTIONS[1]
   return (
-    <>
+    <div className="w-full">
       <button
-        onClick={onClick}
+        onClick={() => setOpen((v) => !v)}
         className="flex h-[48px] w-full items-center justify-between overflow-clip rounded-sm border border-[#d9d9db] bg-bg-primary px-[16px] py-[13px]"
       >
         <span className="flex items-center gap-[9px]">
-          <img alt="" src={A.chat} className="size-[18px]" />
-          <span className="text-body font-semibold text-fg-primary">Can comment</span>
+          <img alt="" src={current.icon} className="size-[18px]" />
+          <span className="text-body font-semibold text-fg-primary">{value}</span>
         </span>
-        <img alt="" src={A.caret} className="size-[20px]" />
+        <img alt="" src={A.caret} className={`size-[20px] transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
 
       {open && (
-        <div className="flex w-full flex-col overflow-clip rounded-sm border-[1.5px] border-[#d9d9db] bg-bg-primary shadow-[0px_6px_18px_0px_rgba(0,0,0,0.12)]">
-          <div className="flex items-center gap-[10px] overflow-clip bg-bg-primary px-[16px] py-[13px]">
-            <img alt="" src={A.eye} className="size-[18px]" />
-            <span className="flex-1 text-body font-semibold text-fg-primary">Can view</span>
-          </div>
-          <div className="h-[1.5px] w-full bg-border-subtle" />
-          <div className="flex items-center gap-[10px] overflow-clip bg-bg-secondary px-[16px] py-[13px]">
-            <img alt="" src={A.chat} className="size-[18px]" />
-            <span className="flex-1 text-left text-body font-semibold text-fg-primary">Can comment</span>
-            <img alt="" src={A.check} className="size-[18px]" />
-          </div>
-          <div className="h-[1.5px] w-full bg-border-subtle" />
-          <div className="flex items-center gap-[10px] overflow-clip bg-bg-primary px-[16px] py-[13px]">
-            <img alt="" src={A.pencil} className="size-[18px]" />
-            <span className="flex-1 text-body font-semibold text-fg-brand">Can edit</span>
-          </div>
+        <div className="mt-[6px] flex w-full flex-col overflow-clip rounded-sm border-[1.5px] border-[#d9d9db] bg-bg-primary shadow-[0px_6px_18px_0px_rgba(0,0,0,0.12)]">
+          {PERM_OPTIONS.map((o, i) => {
+            const active = o.value === value
+            return (
+              <div key={o.value}>
+                {i > 0 && <div className="h-[1.5px] w-full bg-border-subtle" />}
+                <button
+                  onClick={() => {
+                    setValue(o.value)
+                    setOpen(false)
+                  }}
+                  className={`flex w-full items-center gap-[10px] overflow-clip px-[16px] py-[13px] text-left ${
+                    active ? 'bg-bg-secondary' : 'bg-bg-primary'
+                  }`}
+                >
+                  <img alt="" src={o.icon} className="size-[18px]" />
+                  <span
+                    className={`flex-1 text-body font-semibold ${
+                      o.value === 'Can edit' ? 'text-fg-brand' : 'text-fg-primary'
+                    }`}
+                  >
+                    {o.value}
+                  </span>
+                  {active && <img alt="" src={A.check} className="size-[18px]" />}
+                </button>
+              </div>
+            )
+          })}
         </div>
       )}
-    </>
+    </div>
   )
 }
 
@@ -334,7 +344,7 @@ function WhatTheySee() {
             <p className="w-full font-semibold text-fg-brand">CR scores &amp; why it scored</p>
             <p className="w-full text-fg-secondary">The ratings behind each pick</p>
           </div>
-          <ToggleOn />
+          <Toggle />
         </div>
       </div>
     </>
@@ -345,9 +355,7 @@ function NoteField() {
   return (
     <div className="flex w-full flex-col gap-[8px] overflow-clip">
       <p className="text-body font-semibold text-fg-secondary">A note for them (optional)</p>
-      <div className="flex h-[84px] w-full flex-col items-start overflow-clip rounded-sm border border-border-strong bg-bg-primary px-[16px] py-[14px]">
-        <p className="w-full text-body text-fg-secondary">Why you picked these? What should they weigh in on?</p>
-      </div>
+      <CommentField placeholder="Why you picked these? What should they weigh in on?" />
     </div>
   )
 }
@@ -367,12 +375,23 @@ function CreateButton({ enabled, onClick }: { enabled: boolean; onClick?: () => 
   return (
     <button
       onClick={enabled ? onClick : undefined}
-      className={`flex h-[48px] w-full items-center justify-center rounded-xl ${
+      className={`flex h-[48px] min-h-[48px] w-full shrink-0 items-center justify-center rounded-xl ${
         enabled ? 'bg-brand' : 'bg-bg-disabled'
       }`}
     >
       <span className="text-body font-semibold text-fg-inverse">Create shared list</span>
     </button>
+  )
+}
+
+/** Editable multi-line comment box. */
+function CommentField({ placeholder }: { placeholder: string }) {
+  return (
+    <textarea
+      placeholder={placeholder}
+      rows={2}
+      className="h-[84px] w-full resize-none rounded-sm border border-border-strong bg-bg-primary px-[16px] py-[14px] text-body text-fg-primary outline-none placeholder:text-fg-secondary focus:border-brand"
+    />
   )
 }
 
@@ -398,7 +417,7 @@ export function CollaborationScreen() {
   if (stage === 'confirm') {
     return (
       <FigmaFrame backdrop={A.bg} backdropOpacity={0.4}>
-        <NaviBar />
+        <NaviRail active="saved" />
         <Panel bg="bg-bg-secondary" height={815}>
           <CloseX onClick={() => navigate('/')} />
           <ListHeader eyebrowIcon={A.lockEyebrow} eyebrow="Your private list" onShare={() => go('share')} />
@@ -421,7 +440,7 @@ export function CollaborationScreen() {
   if (stage === 'shared') {
     return (
       <FigmaFrame backdrop={A.bg} backdropOpacity={0.4}>
-        <NaviBar />
+        <NaviRail active="saved" />
         <Panel bg="bg-bg-secondary" height={803}>
           <CloseX onClick={() => navigate(routes.postPurchase)} />
           <ListHeader eyebrowIcon={A.people} eyebrow="Your shared list" onShare={() => navigate(routes.postPurchase)} />
@@ -456,12 +475,12 @@ export function CollaborationScreen() {
   const hasChip = stage === 'add' || stage === 'permissions'
   const chipName = stage === 'permissions' ? 'Maya' : 'Alex'
   const dropdownOpen = stage === 'permissions'
-  const canCreate = stage === 'permissions'
+  const canCreate = hasChip
   const panelHeight = stage === 'share' ? 760 : 800
 
   return (
     <FigmaFrame backdrop={A.bg} backdropOpacity={stage === 'permissions' ? 0.1 : 0.4}>
-      <NaviBar />
+      <NaviRail active="saved" />
       <Panel bg="bg-white" height={panelHeight}>
         <CloseX onClick={() => navigate('/')} />
         <ShareHeader />
@@ -474,7 +493,7 @@ export function CollaborationScreen() {
 
         {/* They can */}
         <LabeledSection label="They can">
-          <PermSelect open={dropdownOpen} onClick={() => go('permissions')} />
+          <PermSelect defaultOpen={dropdownOpen} />
         </LabeledSection>
 
         <WhatTheySee />

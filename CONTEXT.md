@@ -10,7 +10,7 @@ future session) can pick up without re-deriving it. Written 2026-07-09.
 **Connie** is a **Consumer Reports (CR) browser-extension shopping assistant** that overlays retail
 pages (Google search, Amazon, Philips Avent, etc.) to help a shopper research and buy a **stroller**.
 It surfaces CR lab testing + community sentiment, annotates on-page marketing claims, infers the
-shopper's priorities, produces a personalized Top 3, supports shared/collaborative lists, and does a
+shopper's priorities, produces a personalized ranking, supports shared/collaborative lists, and does a
 post-purchase check-in.
 
 This repo is a **working React prototype** of that experience, reproduced faithfully from Figma.
@@ -118,7 +118,7 @@ Open `/` for the flow launcher, or "Start the full flow" to walk the prototype.
 | Product Insights | Amazon backdrop; RECOMMENDED panel, DID YOU KNOW banner, accordion insight rows w/ CR+Reddit source chips, expanded detail, not-recommended, tooltip, nav-menu, collapsed. |
 | Annotations | Amazon PDP; 4 verdict callouts (verified CR+community / community-only / misleading / unverifiable) with exact per-verdict colors + source cards. |
 | Priority Inference | Connie chat inferring priorities; bento priority grid with ranked/green cards + soft-star; 8 progressive steps. |
-| Decision Support | Personalized Top 3; cards/table toggle, editable list w/ checkboxes, compare-retailers popover, detailed deep-dive, 900px expanded cards/table. |
+| Decision Support | Personalized ranking; cards/table toggle, editable list w/ checkboxes, compare-retailers popover, detailed deep-dive, 900px expanded cards/table. |
 | Collaboration | C1 confirm → C2 share → C3 add/permissions → C4 shared list, avatars, permission toggles. |
 | Post-Purchase | Philips Avent backdrop; multi-step check-in (product card, chips, star+comment, thanks banner). |
 | Chat | Chat 4 (empty in Figma) — reproduced with the PP chat-panel design as the completed thread. |

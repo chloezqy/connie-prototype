@@ -10,6 +10,7 @@ import {
   type ProductInsightsPayload,
 } from '@/types/connie-contract'
 import { usePreferences, preferencesToPriorities } from '@/store/usePreferences'
+import { NaviRail } from '@/components/connie/NaviRail'
 
 /* ------------------------------------------------------------------ *
  * Decision Support — faithful reproduction of Figma frames
@@ -54,29 +55,6 @@ const asset = {
 
 type View = 'cards' | 'table'
 type Mode = 'compare' | 'detailed' | null
-
-/* -------------------------------------------------------------- Navi bar */
-/** Vertical Navi rail, "Saved" state (heart highlighted) — Figma 1052:5290. */
-function NaviBar({ style }: { style: CSSProperties }) {
-  return (
-    <div
-      className="absolute flex items-center rounded-[8px] border-[0.5px] border-border-subtle bg-white p-[10px] drop-shadow-[0px_0px_7.5px_rgba(5,5,0,0.16)]"
-      style={style}
-    >
-      <div className="flex flex-col items-start gap-[16px]">
-        <div className="flex flex-col items-start gap-[16px]">
-          <img src={asset.naviChat} alt="" className="size-[40px]" />
-          <img src={asset.naviHeart} alt="" className="size-[40px]" />
-        </div>
-        <div className="h-[2px] w-full bg-[#e1e1e1]" />
-        <div className="flex flex-col items-start gap-[16px]">
-          <img src={asset.naviGear} alt="" className="size-[40px]" />
-          <img src={asset.naviQuestion} alt="" className="size-[40px]" />
-        </div>
-      </div>
-    </div>
-  )
-}
 
 /* -------------------------------------------------------------- Checkbox */
 function CheckBox({ checked, onClick }: { checked: boolean; onClick?: () => void }) {
@@ -149,10 +127,12 @@ function SelectionHeader({
   expanded,
   allChecked,
   toggleAll,
+  onShare,
 }: {
   expanded: boolean
   allChecked: boolean
   toggleAll: () => void
+  onShare: () => void
 }) {
   return (
     <div className="flex w-full shrink-0 items-center gap-[8px] rounded-[8px] bg-bg-tertiary pr-[8px]">
@@ -164,7 +144,7 @@ function SelectionHeader({
       </div>
       {expanded ? (
         <div className="flex items-start gap-[16px]">
-          <button className="flex items-center gap-[6px]">
+          <button aria-label="Share" onClick={onShare} className="flex items-center gap-[6px]">
             <img src={asset.share} alt="" className="h-[15.75px] w-[12px]" />
             <span className="text-[14px] leading-[20px] text-fg-secondary">SHARE</span>
           </button>
@@ -175,7 +155,7 @@ function SelectionHeader({
         </div>
       ) : (
         <>
-          <button aria-label="Share" className="size-[18px]">
+          <button aria-label="Share" onClick={onShare} className="size-[18px]">
             <img src={asset.share} alt="" className="size-full" />
           </button>
           <button aria-label="Delete" className="flex h-[26px] w-[25px] items-center justify-center rounded-full">
@@ -270,7 +250,7 @@ function productsToCards(payload: DecisionSupportPayload): Card[] {
 }
 
 function productsToTableRows(payload: DecisionSupportPayload): TableRow[] {
-  return payload.products.map((p) => {
+  return payload.products.slice(0, 5).map((p) => {
     const notRec = /not recommended/i.test(p.rank_label)
     return {
       name: p.product_name,
@@ -460,10 +440,6 @@ const tableRows: TableRow[] = [
   { name: 'Lite 3', badge: 'NOT REC', badgeType: 'notrec', fold: '3-Step', weight: '15lb', terrain: false, price: '$199' },
   { name: 'Mockingbird', fold: '2-Step', weight: '26lb', terrain: true, price: '$650' },
   { name: 'Cruz V2', fold: '2-Step', weight: '25lb', terrain: true, price: '$699' },
-  { name: 'Urban Glide 2', fold: '1-Hand', weight: '25lb', terrain: true, price: '$649' },
-  { name: 'Minu V2', fold: '1-Hand', weight: '17lb', terrain: false, price: '$449' },
-  { name: 'G-Luxe', fold: '3-Step', weight: '16lb', terrain: false, price: '$199' },
-  { name: 'Mixx Next', fold: '2-Step', weight: '28lb', terrain: true, price: '$800' },
 ]
 
 function TerrainMark({ ok }: { ok: boolean }) {
@@ -511,34 +487,56 @@ function InsightCallout({ verdict }: { verdict?: string | null }) {
   )
 }
 
-/** Standard (transposed) comparison table — Figma 1052:3974. */
-function StandardTable({ rows }: { rows: TableRow[] }) {
-  const th = 'flex flex-col justify-center border-b border-border-subtle px-[8px] pb-[9px] pt-[8px] text-[12px] font-semibold leading-[16px] text-fg-primary'
-  const td = 'flex flex-col justify-center border-b border-border-subtle px-[8px] pb-[13.5px] pt-[11.5px] text-[12px] font-semibold leading-[16px] text-fg-primary'
+/** Pick a stroller thumbnail for a table row (only two product photos exist). */
+function tableRowImage(name: string): string {
+  const n = name.toLowerCase()
+  if (n.includes('gt2') || n.includes('city') || n.includes('lite') || n.includes('minu')) return asset.prodCity
+  return asset.prodVista
+}
+
+/** Standard comparison table — 6 columns: select · Product · Fold · Weight · Terrain · Price.
+    The select-all lives in the toolbar above, so the header row has no checkbox. */
+function StandardTable({
+  rows,
+  selected,
+  onToggle,
+}: {
+  rows: TableRow[]
+  selected: Set<string>
+  onToggle: (name: string) => void
+}) {
+  const th =
+    'flex items-center border-b border-border-subtle px-[10px] py-[12px] text-[13px] font-semibold leading-[18px] text-fg-secondary'
+  const td =
+    'flex items-center border-b border-border-subtle px-[10px] py-[14px] text-[15px] leading-[20px] text-fg-primary'
   return (
-    <div className="w-full shrink-0 overflow-clip">
+    <div className="w-full shrink-0 overflow-clip rounded-[12px] border border-border-subtle">
       {/* header */}
-      <div className="flex w-full items-start justify-center rounded-t-[12px] bg-bg-tertiary">
-        <div className={`${th} w-[119.31px] items-start rounded-tl-[12px]`}>Product</div>
-        <div className={`${th} w-[64.52px] items-center text-center`}>Fold</div>
-        <div className={`${th} w-[64.11px] items-center text-center`}>Weight</div>
-        <div className={`${th} w-[64.41px] items-center text-center`}>Terrain</div>
-        <div className={`${th} w-[53.66px] items-end rounded-tr-[12px] text-right`}>Price</div>
+      <div className="flex w-full items-stretch bg-bg-tertiary">
+        <div className={`${th} w-[44px] justify-center`} />
+        <div className={`${th} flex-1 justify-start`}>Product</div>
+        <div className={`${th} w-[66px] justify-center`}>Fold</div>
+        <div className={`${th} w-[66px] justify-center`}>Weight</div>
+        <div className={`${th} w-[66px] justify-center`}>Terrain</div>
+        <div className={`${th} w-[62px] justify-end`}>Price</div>
       </div>
       {/* body */}
       <div className="flex w-full flex-col bg-bg-primary">
         {rows.map((r) => (
-          <div key={r.name} className="flex w-full items-stretch justify-center">
-            <div className="flex w-[119.31px] flex-col items-start justify-center gap-[2px] border-b border-border-subtle px-[8px] py-[10px]">
-              <span className="text-[14px] leading-[20px] text-fg-primary">{r.name}</span>
+          <div key={r.name} className="flex w-full items-stretch">
+            <div className={`${td} w-[44px] justify-center`}>
+              <CheckBox checked={selected.has(r.name)} onClick={() => onToggle(r.name)} />
+            </div>
+            <div className="flex flex-1 flex-col justify-center gap-[3px] border-b border-border-subtle px-[10px] py-[12px]">
+              <span className="text-[15px] font-medium leading-[20px] text-fg-primary">{r.name}</span>
               <TableBadge row={r} />
             </div>
-            <div className={`${td} w-[64.52px] items-center text-center`}>{r.fold}</div>
-            <div className={`${td} w-[64.11px] items-center text-center`}>{r.weight}</div>
-            <div className="flex w-[64.41px] flex-col items-center justify-center border-b border-border-subtle px-[8px]">
+            <div className={`${td} w-[66px] justify-center`}>{r.fold}</div>
+            <div className={`${td} w-[66px] justify-center`}>{r.weight}</div>
+            <div className={`${td} w-[66px] justify-center`}>
               <TerrainMark ok={r.terrain} />
             </div>
-            <div className={`${td} w-[53.66px] items-end text-right`}>{r.price}</div>
+            <div className={`${td} w-[62px] justify-end`}>{r.price}</div>
           </div>
         ))}
       </div>
@@ -546,42 +544,54 @@ function StandardTable({ rows }: { rows: TableRow[] }) {
   )
 }
 
-/** Wide table w/ thumbnail column — Expanded Table View (Figma 1052:5541). */
-function ExpandedTable({ rows }: { rows: TableRow[] }) {
-  const th = 'border-b border-border-subtle px-[12px] pb-[10px] pt-[10px] text-[12px] font-semibold leading-[16px] text-fg-secondary'
-  const cellPad = 'border-b border-border-subtle px-[12px] py-[16px]'
+/** Wide table — Expanded Table View. 6 columns: select · Product (thumbnail + name) · Fold ·
+    Weight · Terrain · Price. The select-all lives in the toolbar above. */
+function ExpandedTable({
+  rows,
+  selected,
+  onToggle,
+}: {
+  rows: TableRow[]
+  selected: Set<string>
+  onToggle: (name: string) => void
+}) {
+  const th =
+    'flex items-center border-b border-border-subtle px-[14px] py-[12px] text-[14px] font-semibold leading-[20px] text-fg-secondary'
+  const td =
+    'flex items-center border-b border-border-subtle px-[14px] py-[16px] text-[16px] leading-[24px] text-fg-primary'
   return (
-    <div className="w-full shrink-0 overflow-clip">
-      <div className="flex w-full items-center">
-        <div className={`${th} w-[90px]`} />
-        <div className={`${th} flex-1`}>Product</div>
-        <div className={`${th} w-[120px] text-left`}>Fold</div>
-        <div className={`${th} w-[120px] text-left`}>Weight</div>
-        <div className={`${th} w-[120px] text-left`}>Terrain</div>
-        <div className={`${th} w-[120px] text-left`}>Price</div>
+    <div className="w-full shrink-0 overflow-clip rounded-[12px] border border-border-subtle">
+      {/* header */}
+      <div className="flex w-full items-stretch bg-bg-tertiary">
+        <div className={`${th} w-[56px] justify-center`} />
+        <div className={`${th} flex-1 justify-start`}>Product</div>
+        <div className={`${th} w-[130px] justify-start`}>Fold</div>
+        <div className={`${th} w-[130px] justify-start`}>Weight</div>
+        <div className={`${th} w-[130px] justify-start`}>Terrain</div>
+        <div className={`${th} w-[120px] justify-start`}>Price</div>
       </div>
-      <div className="flex w-full flex-col">
+      {/* body */}
+      <div className="flex w-full flex-col bg-bg-primary">
         {rows.map((r) => (
-          <div key={r.name} className="flex w-full items-center">
-            <div className={`${cellPad} w-[90px]`}>
-              <div
-                className="size-[56px] rounded-[8px]"
-                style={{
-                  background:
-                    'repeating-conic-gradient(#ecece7 0% 25%, #f7f7f4 0% 50%) 50% / 16px 16px',
-                }}
-              />
+          <div key={r.name} className="flex w-full items-stretch">
+            <div className={`${td} w-[56px] justify-center`}>
+              <CheckBox checked={selected.has(r.name)} onClick={() => onToggle(r.name)} />
             </div>
-            <div className={`${cellPad} flex flex-1 flex-col gap-[4px]`}>
-              <span className="text-[14px] leading-[20px] text-fg-primary">{r.name}</span>
-              <TableBadge row={r} />
+            <div className="flex flex-1 items-center gap-[14px] border-b border-border-subtle px-[14px] py-[14px]">
+              <div className="flex size-[52px] shrink-0 items-center justify-center overflow-clip rounded-[8px] bg-bg-tertiary">
+                <img src={tableRowImage(r.name)} alt="" className="size-full object-cover" />
+              </div>
+              <div className="flex flex-col gap-[4px]">
+                <span className="text-[16px] font-medium leading-[22px] text-fg-primary">{r.name}</span>
+                <TableBadge row={r} />
+              </div>
             </div>
-            <div className={`${cellPad} w-[120px] text-[14px] leading-[20px] text-fg-primary`}>{r.fold}</div>
-            <div className={`${cellPad} w-[120px] text-[14px] leading-[20px] text-fg-primary`}>{r.weight}</div>
-            <div className={`${cellPad} flex w-[120px]`}>
+            <div className={`${td} w-[130px] justify-start`}>{r.fold}</div>
+            <div className={`${td} w-[130px] justify-start`}>{r.weight}</div>
+            <div className={`${td} w-[130px] justify-start`}>
               <TerrainMark ok={r.terrain} />
             </div>
-            <div className={`${cellPad} w-[120px] text-[14px] leading-[20px] text-fg-primary`}>{r.price}</div>
+            <div className={`${td} w-[120px] justify-start`}>{r.price}</div>
           </div>
         ))}
       </div>
@@ -922,6 +932,7 @@ export function DecisionSupportScreen() {
   const mode = (params.get('mode') as Mode) || null
 
   const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [tableSelected, setTableSelected] = useState<Set<string>>(new Set())
   const [showDetails, setShowDetails] = useState(true)
   const [hoverCompare, setHoverCompare] = useState(false)
 
@@ -977,6 +988,19 @@ export function DecisionSupportScreen() {
     })
   const allChecked = activeCards.every((c) => selected.has(c.id))
   const toggleAll = () => setSelected(allChecked ? new Set() : new Set(activeCards.map((c) => c.id)))
+
+  const toggleTableRow = (name: string) =>
+    setTableSelected((s) => {
+      const n = new Set(s)
+      n.has(name) ? n.delete(name) : n.add(name)
+      return n
+    })
+  const tableAllChecked =
+    activeTableRows.length > 0 && activeTableRows.every((r) => tableSelected.has(r.name))
+  const toggleTableAll = () =>
+    setTableSelected(tableAllChecked ? new Set() : new Set(activeTableRows.map((r) => r.name)))
+
+  const goShare = () => navigate(routes.collaborate)
 
   const panelWidth = expanded ? 900 : 520
   const panelLeft = 1440 - 16 - panelWidth // right-aligned inside p-16 body
@@ -1079,12 +1103,34 @@ export function DecisionSupportScreen() {
                   ) : (
                     <InsightCallout verdict={liveVerdict} />
                   )}
-                  <SelectionHeader expanded={expanded} allChecked={allChecked} toggleAll={toggleAll} />
-                  {expanded ? <ExpandedTable rows={activeTableRows} /> : <StandardTable rows={activeTableRows} />}
+                  <SelectionHeader
+                    expanded={expanded}
+                    allChecked={tableAllChecked}
+                    toggleAll={toggleTableAll}
+                    onShare={goShare}
+                  />
+                  {expanded ? (
+                    <ExpandedTable
+                      rows={activeTableRows}
+                      selected={tableSelected}
+                      onToggle={toggleTableRow}
+                    />
+                  ) : (
+                    <StandardTable
+                      rows={activeTableRows}
+                      selected={tableSelected}
+                      onToggle={toggleTableRow}
+                    />
+                  )}
                 </>
               ) : (
                 <>
-                  <SelectionHeader expanded={expanded} allChecked={allChecked} toggleAll={toggleAll} />
+                  <SelectionHeader
+                    expanded={expanded}
+                    allChecked={allChecked}
+                    toggleAll={toggleAll}
+                    onShare={goShare}
+                  />
                   {expanded
                     ? activeCards.map((c, i) => (
                         <ExpandedCard
@@ -1122,7 +1168,7 @@ export function DecisionSupportScreen() {
         <ComparePopover onClose={() => setMode(null)} onHover={setHoverCompare} />
       )}
 
-      <NaviBar style={{ left: 62, top: 300 }} />
+      <NaviRail active="saved" />
 
       <StateSwitcher current={stateKey} onSelect={onState} />
     </FigmaFrame>

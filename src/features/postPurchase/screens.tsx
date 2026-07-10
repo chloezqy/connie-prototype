@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { FigmaFrame } from '@/layouts/FigmaFrame'
+import { routes } from '@/app/routes'
 import { callConnie } from '@/api/connieClient'
 import { isPostPurchase, type CommunityStat } from '@/types/connie-contract'
+import { NaviRail } from '@/components/connie/NaviRail'
 
 /** The product this check-in is about (matches the saved ProductCard). */
 const LIVE_PRODUCT = 'UppaBaby Vista V2'
@@ -40,58 +42,20 @@ function Backdrop() {
 
 /* ---------- Shared Connie post-purchase primitives ---------- */
 
-/** Collapsed Connie "Navi bar" rail — 1052:5192. Fixed at left 62 / top 300. */
-function NaviRail({ notify = false, onOpen }: { notify?: boolean; onOpen?: () => void }) {
-  return (
-    <div
-      className="absolute flex items-center rounded-[8px] border-[0.5px] border-border-subtle bg-white p-[10px] shadow-[0px_0px_7.5px_0px_rgba(5,5,0,0.16)]"
-      style={{ left: 62, top: 300 }}
-    >
-      <div className="flex flex-col items-start gap-[16px]">
-        <div className="flex flex-col items-start gap-[16px]">
-          <button aria-label="Open Connie chat" onClick={onOpen} className="relative block size-[40px]">
-            <img alt="" src={asset.naviChat} className="absolute inset-0 block size-full" />
-          </button>
-          <div className="relative size-[40px]">
-            <img alt="" src={asset.naviHeart} className="absolute inset-0 block size-full" />
-          </div>
-        </div>
-        <div className="relative h-0 w-full">
-          <img alt="" src={asset.naviLine} className="block h-[2px] w-full" />
-        </div>
-        <div className="flex flex-col items-start gap-[16px]">
-          <div className="relative size-[40px]">
-            <img alt="" src={asset.naviGear} className="absolute inset-0 block size-full" />
-          </div>
-          <div className="relative size-[40px]">
-            <img alt="" src={asset.naviQuestion} className="absolute inset-0 block size-full" />
-          </div>
-        </div>
-      </div>
-      {notify && (
-        <img
-          alt=""
-          src={asset.naviDot}
-          className="pointer-events-none absolute size-[14px]"
-          style={{ left: 30, top: 13 }}
-        />
-      )}
-    </div>
-  )
-}
-
 /** Connie chat panel shell — header + divider + scrolling body. */
 function ConniePanel({
   left,
   top,
   scroll,
   children,
+  footer,
   onClose,
 }: {
   left: number
   top: number
   scroll?: boolean
   children: ReactNode
+  footer?: ReactNode
   onClose?: () => void
 }) {
   return (
@@ -123,6 +87,8 @@ function ConniePanel({
       >
         {children}
       </div>
+      {/* Fixed composer pinned to the bottom of the panel. */}
+      {footer && <div className="w-full shrink-0 border-t border-border-subtle p-[20px]">{footer}</div>}
     </div>
   )
 }
@@ -149,7 +115,7 @@ function UserBubble({ children }: { children: ReactNode }) {
 
 type ChipState = 'default' | 'active' | 'selected'
 /** Choice chip (1052:4865). default=thin gray, active=2px subtle, selected=2px brand. */
-function Chip({ label, state = 'default' }: { label: string; state?: ChipState }) {
+function Chip({ label, state = 'default', onClick }: { label: string; state?: ChipState; onClick?: () => void }) {
   const border =
     state === 'selected'
       ? 'border-2 border-border-brand'
@@ -157,11 +123,13 @@ function Chip({ label, state = 'default' }: { label: string; state?: ChipState }
         ? 'border-2 border-border-subtle'
         : 'border-[1.5px] border-[#d9d9db]'
   return (
-    <div
-      className={`flex shrink-0 items-center overflow-clip rounded-pill bg-bg-primary px-[15px] py-[9px] ${border}`}
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex shrink-0 items-center overflow-clip rounded-pill bg-bg-primary px-[15px] py-[9px] text-left ${border}`}
     >
       <p className="whitespace-nowrap text-[14px] leading-[20px] text-fg-primary">{label}</p>
-    </div>
+    </button>
   )
 }
 
@@ -271,25 +239,50 @@ export function PostPurchaseScreen() {
   }, [])
   const sentimentChips = sentiments ?? ['Love it', "It's fine", 'Not what I hoped']
 
-  // Panel visibility + position per frame.
-  const panelOpen = step !== 0 && step !== 4
-  const pos: Record<number, { left: number; top: number; scroll: boolean }> = {
-    1: { left: 864, top: 72, scroll: false },
-    2: { left: 864, top: 72, scroll: false },
-    3: { left: 864, top: 72, scroll: false },
-    5: { left: 871, top: 50, scroll: true },
-    6: { left: 885, top: 50, scroll: true },
-    7: { left: 885, top: 50, scroll: true },
+  // Captured answers (drive the user reply bubbles + chip highlight).
+  const [q1, setQ1] = useState<string | null>(null)
+  const [q2, setQ2] = useState<string | null>(null)
+  const [q3, setQ3] = useState<string | null>(null)
+
+  // After answering a question, reveal its reply immediately then auto-advance to the next
+  // question after ~800ms (matches the Figma prototype's "after delay" interaction).
+  const timerRef = useRef<number | null>(null)
+  useEffect(() => () => { if (timerRef.current) window.clearTimeout(timerRef.current) }, [])
+  const advanceAfter = (n: number) => {
+    if (timerRef.current) window.clearTimeout(timerRef.current)
+    timerRef.current = window.setTimeout(() => go(n), 800)
   }
-  const p = pos[step] ?? { left: 864, top: 72, scroll: false }
+  const answerQ1 = (label: string) => { setQ1(label); go(2); advanceAfter(3) }
+  const answerQ2 = (label: string) => { setQ2(label); go(4); advanceAfter(5) }
+  const answerQ3 = (label: string) => { setQ3(label); go(6); advanceAfter(7) }
+
+  // Panel visibility + position per frame.
+  const panelOpen = step !== 0
+  const pos: Record<number, { left: number; top: number }> = {
+    1: { left: 864, top: 72 },
+    2: { left: 864, top: 72 },
+    3: { left: 864, top: 72 },
+    4: { left: 864, top: 72 },
+    5: { left: 871, top: 50 },
+    6: { left: 885, top: 50 },
+    7: { left: 885, top: 50 },
+  }
+  const p = pos[step] ?? { left: 864, top: 72 }
+  const scroll = step >= 3
 
   return (
     <FigmaFrame bg="#f4f4f5">
       <Backdrop />
-      <NaviRail notify={step === 0} onOpen={() => go(step === 0 ? 1 : 5)} />
+      <NaviRail notify={step === 0} onChat={() => go(step === 0 ? 1 : 5)} />
 
       {panelOpen && (
-        <ConniePanel left={p.left} top={p.top} scroll={p.scroll} onClose={() => go(step >= 5 ? 4 : 0)}>
+        <ConniePanel
+          left={p.left}
+          top={p.top}
+          scroll={scroll}
+          onClose={() => go(0)}
+          footer={<InputBar />}
+        >
           {/* Pre-scroll intro (present in PP1–PP3) */}
           {(step === 1 || step === 2 || step === 3) && (
             <>
@@ -301,40 +294,33 @@ export function PostPurchaseScreen() {
           {(step === 5 || step === 6) && <ProductCard />}
 
           {/* Q1 — Did you buy it? */}
-          {step === 1 ? (
-            <ChipRow>
-              <Chip label="Yes - I bought it " state="active" />
-              <Chip label="Not yet" />
-              <Chip label="Bought a different one" />
-              <Chip label="Other" />
-            </ChipRow>
-          ) : (
-            <>
-              <ChipRow>
-                <Chip label="Yes - I bought it " state="selected" />
-                <Chip label="Not yet" />
-                <Chip label="Bought a different one" />
-                <Chip label="Other" />
-              </ChipRow>
-              <UserBubble>Yes - I bought it</UserBubble>
-            </>
-          )}
+          <ChipRow>
+            {['Yes - I bought it ', 'Not yet', 'Bought a different one', 'Other'].map((label, i) => (
+              <Chip
+                key={label}
+                label={label}
+                state={q1 === label ? 'selected' : step === 1 && i === 0 ? 'active' : 'default'}
+                onClick={() => answerQ1(label)}
+              />
+            ))}
+          </ChipRow>
+          {step >= 2 && <UserBubble>{(q1 ?? 'Yes - I bought it').trim()}</UserBubble>}
 
           {/* Q2 — How's it treating you? (PP3 onward) */}
           {step >= 3 && (
             <>
               <BotBubble>{checkInMsg ?? "How's it treating you?"}</BotBubble>
               <ChipRow>
-                {sentimentChips.map((label, i) => (
+                {[...sentimentChips, 'Other'].map((label, i) => (
                   <Chip
                     key={label}
                     label={label}
-                    state={i === 0 ? (step === 3 ? 'active' : 'selected') : 'default'}
+                    state={q2 === label ? 'selected' : step === 3 && i === 0 ? 'active' : 'default'}
+                    onClick={() => answerQ2(label)}
                   />
                 ))}
-                <Chip label="Other" />
               </ChipRow>
-              {step >= 4 && <UserBubble>{sentimentChips[0]}</UserBubble>}
+              {step >= 4 && <UserBubble>{q2 ?? sentimentChips[0]}</UserBubble>}
             </>
           )}
 
@@ -343,18 +329,21 @@ export function PostPurchaseScreen() {
             <>
               <BotBubble>Love that. Quick one - what would've made it even better?</BotBubble>
               <ChipRow>
-                <Chip label="Fold & portability" />
-                <Chip label="Comfort" />
-                <Chip label="Durability" state={step === 5 ? 'active' : 'selected'} />
-                <Chip label="Other" />
+                {['Fold & portability', 'Comfort', 'Durability', 'Other'].map((label) => (
+                  <Chip
+                    key={label}
+                    label={label}
+                    state={q3 === label ? 'selected' : step === 5 && label === 'Durability' ? 'active' : 'default'}
+                    onClick={() => answerQ3(label)}
+                  />
+                ))}
               </ChipRow>
+              {step >= 6 && q3 && <UserBubble>{q3}</UserBubble>}
             </>
           )}
 
           {/* Confirmation banner (PP9) */}
           {step === 7 && <ThanksBanner stat={stat} />}
-
-          <InputBar />
         </ConniePanel>
       )}
 

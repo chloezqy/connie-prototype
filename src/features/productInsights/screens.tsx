@@ -5,6 +5,7 @@ import { routes } from '@/app/routes'
 import { callConnie } from '@/api/connieClient'
 import { isProductInsights, type ProductInsightsPayload } from '@/types/connie-contract'
 import { usePreferences, preferencesToPriorities } from '@/store/usePreferences'
+import { NaviRail } from '@/components/connie/NaviRail'
 
 /** The product this "page" is about — drives the live product_insights request. */
 const LIVE_PRODUCT = 'UPPAbaby Vista V2'
@@ -347,63 +348,134 @@ function BasedOnPopover({ onClose, preferences }: { onClose: () => void; prefere
   )
 }
 
-/* --------------------------------------------------- Recommended panel */
-function RecommendedPanel({
+/* --------------------------------------------------- Insight panel (shared) */
+type Verdict = 'recommended' | 'notrec'
+const VERDICT_CFG: Record<
+  Verdict,
+  { icon: string; title: string; funFact: string; headsUp: { title: string; text: string } }
+> = {
+  recommended: {
+    icon: `${A}star.svg`,
+    title: 'RECOMMENDED',
+    funFact:
+      'Oscar-winning actress Anne Hathaway has been spotted pushing this stroller through Central Park.',
+    headsUp: {
+      title: 'Heads up on comfort',
+      text: 'Great pick overall - just note a few users noted that the seat was less comfortable than expected.',
+    },
+  },
+  notrec: {
+    icon: `${A}xcircle.svg`,
+    title: 'NOT RECOMMENDED',
+    funFact:
+      'This model was quietly pulled from several retailers after a string of owner complaints about the frame.',
+    headsUp: {
+      title: 'One thing in its favor',
+      text: "It's among the cheapest options on the shelf - but our testers found the tradeoffs rarely worth it.",
+    },
+  },
+}
+
+/**
+ * The floating Connie insight card. RECOMMENDED and NOT RECOMMENDED share this exact layout,
+ * colors, spacing, and type - only the verdict icon/title and the row/copy content differ.
+ */
+function InsightPanel({
+  verdict,
   initialExpanded,
   initialTooltip,
   onClose,
   rows,
   preferences,
 }: {
+  verdict: Verdict
   initialExpanded: number | null
   initialTooltip: boolean
   onClose: () => void
   rows: RowData[]
   preferences: string[]
 }) {
+  const cfg = VERDICT_CFG[verdict]
   const [openRow, setOpenRow] = useState<number | null>(initialExpanded)
   const [tooltip, setTooltip] = useState(initialTooltip)
+  const [saved, setSaved] = useState(false)
+
+  // Draggable panel position (Figma default 736 / 287).
+  const [pos, setPos] = useState({ left: 736, top: 287 })
+  const dragRef = useRef<{ x: number; y: number; left: number; top: number } | null>(null)
+  const onDragStart = (e: React.PointerEvent) => {
+    dragRef.current = { x: e.clientX, y: e.clientY, left: pos.left, top: pos.top }
+    e.currentTarget.setPointerCapture(e.pointerId)
+  }
+  const onDragMove = (e: React.PointerEvent) => {
+    const d = dragRef.current
+    if (!d) return
+    setPos({ left: d.left + (e.clientX - d.x), top: d.top + (e.clientY - d.y) })
+  }
+  const onDragEnd = () => {
+    dragRef.current = null
+  }
 
   return (
     <>
       <div
         className="absolute flex flex-col overflow-hidden rounded-[16px] border-[0.5px] border-[#c5c5c5] bg-bg-secondary shadow-[0px_0px_15px_0px_rgba(5,5,0,0.16)]"
-        style={{ left: 736, top: 287, width: 540, height: 536 }}
+        style={{ left: pos.left, top: pos.top, width: 540, height: 536 }}
       >
-        {/* header */}
-        <div className="shrink-0 pl-[36px] pr-[56px] pt-[28px]">
+        {/* header — drag handle */}
+        <div
+          className="shrink-0 cursor-grab touch-none pl-[36px] pr-[56px] pt-[28px] active:cursor-grabbing"
+          onPointerDown={onDragStart}
+          onPointerMove={onDragMove}
+          onPointerUp={onDragEnd}
+        >
           <div className="flex h-[40px] w-full items-center justify-between px-[8px]">
             <div className="flex items-center gap-[12px]">
               <div className="flex items-center gap-[10px]">
-                <img src={`${A}star.svg`} alt="" className="size-[20px]" />
+                <img src={cfg.icon} alt="" className="size-[20px]" />
                 <span className="whitespace-nowrap text-[18px] font-semibold leading-[22px] tracking-[-0.25px] text-fg-primary">
-                  RECOMMENDED
+                  {cfg.title}
                 </span>
               </div>
-              <button onClick={() => setTooltip((t) => !t)} aria-label="Based on" className="size-[24px]">
+              <button
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={() => setTooltip((t) => !t)}
+                aria-label="Based on"
+                className="size-[24px]"
+              >
                 <img src={`${A}info.svg`} alt="" className="size-full" />
               </button>
             </div>
-            <button className="flex h-[40px] w-[104px] items-center justify-center gap-[4px] rounded-[24px] border border-border-subtle bg-white">
-              <span className="text-[16px] font-semibold leading-[24px] tracking-[-0.25px] text-fg-secondary">Save</span>
+            <button
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={() => setSaved((s) => !s)}
+              className={`flex h-[40px] w-[104px] items-center justify-center gap-[8px] rounded-[24px] border ${
+                saved ? 'border-brand bg-brand-muted' : 'border-border-subtle bg-white'
+              }`}
+            >
+              <span
+                className={`text-[16px] font-semibold leading-[24px] tracking-[-0.25px] ${
+                  saved ? 'text-fg-brand' : 'text-fg-secondary'
+                }`}
+              >
+                {saved ? 'Saved' : 'Save'}
+              </span>
               <img src={`${A}save.svg`} alt="" className="h-[12px] w-[14px]" />
             </button>
           </div>
         </div>
 
-        {/* scrollable body */}
-        <div className="scrollbar-thin min-h-0 flex-1 overflow-y-auto pl-[36px] pr-[56px] pt-[16px]">
+        {/* scrollable body — extra right gutter so the scrollbar isn't flush to the edge */}
+        <div className="scrollbar-thin mr-[10px] min-h-0 flex-1 overflow-y-auto pl-[36px] pr-[46px] pt-[16px]">
           <div className="flex flex-col gap-[16px]">
             <div className="flex flex-col gap-[24px]">
-              {/* DID YOU KNOW */}
+              {/* DID YOU KNOW — inside the card */}
               <div className="relative flex w-full flex-col gap-[4px] overflow-hidden rounded-[8px] bg-gradient-to-r from-[rgba(217,237,226,0.3)] to-[rgba(251,245,221,0.3)] px-[24px] py-[20px]">
                 <div className="flex w-full items-center gap-[8px]">
                   <img src={`${A}shootingstar.svg`} alt="" className="size-[20px]" />
                   <span className="text-[14px] font-semibold leading-[20px] text-[#282923]">DID YOU KNOW?</span>
                 </div>
-                <p className="w-[330px] text-[14px] leading-[20px] text-[#282923]">
-                  Oscar-winning actress Anne Hathaway has been spotted pushing this stroller through Central Park.
-                </p>
+                <p className="w-[330px] text-[14px] leading-[20px] text-[#282923]">{cfg.funFact}</p>
                 <img
                   src={`${A}didyouknow.png`}
                   alt=""
@@ -431,10 +503,8 @@ function RecommendedPanel({
               <div className="flex w-full items-start gap-[8px] bg-[rgba(255,240,244,0.7)] pb-[20px] pl-[16px] pr-[20px] pt-[16px]">
                 <img src={`${A}warning.svg`} alt="" className="h-[23.625px] w-[20px] shrink-0" />
                 <div className="flex flex-1 flex-col gap-[4px]">
-                  <p className="text-[16px] font-semibold leading-[24px] text-fg-primary">Heads up on comfort</p>
-                  <p className="text-[14px] leading-[20px] text-fg-primary">
-                    Great pick overall — just note a few users noted that the seat was less comfortable than expected.
-                  </p>
+                  <p className="text-[16px] font-semibold leading-[24px] text-fg-primary">{cfg.headsUp.title}</p>
+                  <p className="text-[14px] leading-[20px] text-fg-primary">{cfg.headsUp.text}</p>
                 </div>
               </div>
             </div>
@@ -442,7 +512,7 @@ function RecommendedPanel({
         </div>
 
         {/* footer */}
-        <div className="shrink-0 pl-[36px] pr-[56px] pb-[24px]">
+        <div className="shrink-0 pb-[24px] pl-[36px] pr-[56px]">
           <div className="flex w-full items-center justify-center gap-[12px] border-t border-border-subtle py-[12px]">
             <span className="whitespace-nowrap text-[14px] font-semibold leading-[20px] text-[#585858]">
               LIKE THIS REC?
@@ -469,99 +539,117 @@ function RecommendedPanel({
   )
 }
 
-/* ------------------------------------------------- Not Recommended panel */
-type NotRecRow = { title: string; text: string; dim: boolean; sources: string[] }
-const notRecRows: NotRecRow[] = [
+/* ---- Not-Recommended rows — same RowData shape as the recommended card ---- */
+const notRecRows: RowData[] = [
   {
+    icon: `${A}toprated.svg`,
+    iconSize: 20,
     title: 'Low Rated',
-    text: 'No bumps in the road here. CR and parents agree: this one earns its reputation.',
-    dim: false,
+    subtitle: 'Bumpy road ahead. CR and parents agree: this one falls short of its price.',
     sources: [av5, av7],
+    detail: [
+      {
+        source: 'Consumer Reports',
+        text: 'Our lab testers scored this 54/100, with low marks for maneuverability, ease of use, and safety.',
+        chipImg: av7,
+        chipLabel: 'Baby Trend Stroller Review',
+      },
+      {
+        source: 'Reddit',
+        text: 'Of 512 Reddit mentions surveyed, most were negative, citing a rough ride and poor durability.',
+        chipImg: av5,
+        chipLabel: 'Worst Strollers: Thread',
+      },
+    ],
   },
   {
+    icon: `${A}city.svg`,
+    iconSize: 18,
     title: 'Poor Maneuverability',
-    text: "Not built for the urban jungle. Struggles with sidewalks and curbs, and doesn't fold well.",
-    dim: false,
+    subtitle: "Not built for the urban jungle. Struggles with sidewalks and curbs, and doesn't fold well.",
     sources: [av18, av7],
+    detail: [
+      {
+        source: 'Consumer Reports',
+        text: 'A wide turning radius and bulky fold scored poorly in our urban maneuverability tests.',
+        chipImg: av7,
+        chipLabel: 'City Stroller Guide',
+      },
+      {
+        source: 'Reddit',
+        text: 'City parents repeatedly complain it snags on curbs and barely fits through doorways.',
+        chipImg: av5,
+        chipLabel: 'r/Parenting Thread',
+      },
+    ],
   },
   {
+    icon: `${A}sketch.svg`,
+    iconSize: 20,
     title: 'Falls Apart Fast',
-    text: 'Cheap fabrics and wobbly wheels that make resale and hand-me-downs difficult.',
-    dim: false,
+    subtitle: 'Cheap fabrics and wobbly wheels that make resale and hand-me-downs difficult.',
     sources: [av5, av7],
+    detail: [
+      {
+        source: 'Consumer Reports',
+        text: 'Frame and fabric showed heavy wear partway through our accelerated wear testing.',
+        chipImg: av7,
+        chipLabel: 'Durability Report',
+      },
+      {
+        source: 'Reddit',
+        text: 'Owners frequently mention weak resale value and parts failing within the first year.',
+        chipImg: av5,
+        chipLabel: 'Resale Thread',
+      },
+    ],
   },
   {
+    icon: `${A}cloud.svg`,
+    iconSize: 20,
     title: 'Bumpy Ride',
-    text: "Suspension doesn't do much to soften bumps or uneven pavement.",
-    dim: true,
+    subtitle: "Suspension doesn't do much to soften bumps or uneven pavement.",
     sources: [av5, av7],
+    detail: [
+      {
+        source: 'Consumer Reports',
+        text: 'Suspension transmitted most road vibration in our ride tests, worse than competitors.',
+        chipImg: av7,
+        chipLabel: 'Comfort Review',
+      },
+      {
+        source: 'Reddit',
+        text: 'Parents note their kids fuss on longer walks over the stiff, jarring ride.',
+        chipImg: av5,
+        chipLabel: 'r/BeyondtheBump',
+      },
+    ],
   },
   {
+    icon: `${A}fold.svg`,
+    iconSize: 28,
     title: 'Difficult to Fold',
-    text: 'Takes both hands and a few extra steps to close properly.',
-    dim: true,
+    subtitle: 'Takes both hands and a few extra steps to close properly.',
     sources: [av18, av7],
+    detail: [
+      {
+        source: 'Consumer Reports',
+        text: 'The fold mechanism jammed intermittently across our repeated open/close trials.',
+        chipImg: av7,
+        chipLabel: 'Fold Mechanism Test',
+      },
+      {
+        source: 'Reddit',
+        text: 'Frequent flyers gripe that it takes two hands and real effort to collapse at the gate.',
+        chipImg: av5,
+        chipLabel: 'Travel Thread',
+      },
+    ],
   },
 ]
 
-function NotRecommendedPanel({ onClose }: { onClose: () => void }) {
-  return (
-    <div
-      className="absolute flex flex-col gap-[24px] overflow-hidden rounded-[16px] border-[0.5px] border-[#c5c5c5] bg-white pb-[36px] pl-[36px] pr-[56px] pt-[36px] shadow-[4px_4px_10px_0px_rgba(0,0,0,0.25)]"
-      style={{ left: 700, top: 170, width: 596, height: 585 }}
-    >
-      {/* header */}
-      <div className="flex h-[40px] w-[504px] shrink-0 items-center justify-between">
-        <div className="flex items-center gap-[16px]">
-          <div className="flex items-center gap-[9px]">
-            <img src={`${A}xcircle.svg`} alt="" className="size-[24px]" />
-            <span className="whitespace-nowrap text-[20px] font-semibold leading-[24px] tracking-[-0.5px] text-fg-primary">
-              NOT RECOMMENDED
-            </span>
-          </div>
-          <img src={`${A}info.svg`} alt="" className="size-[24px]" />
-        </div>
-        <button className="flex w-[100px] items-center justify-between rounded-[6px] border-[0.5px] border-[#8d8d8d] bg-white px-[16px] py-[8px]">
-          <span className="whitespace-nowrap text-[16px] leading-[22px] tracking-[0.8px] text-fg-primary">Save</span>
-          <img src={`${A}save.svg`} alt="" className="h-[15px] w-[18px]" />
-        </button>
-      </div>
-
-      {/* rows */}
-      <div className="scrollbar-thin flex min-h-0 flex-1 flex-col gap-[16px] overflow-y-auto pt-[8px]">
-        {notRecRows.map((r) => (
-          <div
-            key={r.title}
-            className="relative flex w-[504px] shrink-0 items-center justify-between overflow-hidden rounded-[8px] bg-bg-secondary py-[20px] pl-[16px] pr-[20px]"
-          >
-            <div className="relative flex w-[420px] items-center gap-[20px]">
-              <div className="size-[45px] shrink-0 rounded-full bg-gradient-to-b from-[#77798d] to-[#b1b3b9]" />
-              <div className="flex flex-1 flex-col gap-[4px]">
-                <p
-                  className={`text-[18px] font-semibold leading-[22px] tracking-[-0.25px] ${
-                    r.dim ? 'text-fg-secondary' : 'text-fg-primary'
-                  }`}
-                >
-                  {r.title}
-                </p>
-                <p className="text-[16px] leading-[24px] text-fg-primary">{r.text}</p>
-              </div>
-              <Sources imgs={r.sources} size={20} className="absolute left-[300px] top-[-3px]" />
-            </div>
-            <img src={`${A}caret-nr.svg`} alt="" className="size-[20px] shrink-0" />
-          </div>
-        ))}
-      </div>
-
-      <button onClick={onClose} className="absolute left-[562.5px] top-[23.5px] size-[20px]" aria-label="Close">
-        <img src={`${A}x.svg`} alt="" className="size-full" />
-      </button>
-    </div>
-  )
-}
-
 /* -------------------------------------------------------- Product badges */
-function ProductBadges({ onOpen }: { onOpen: () => void }) {
+function ProductBadges({ onOpen, onOpenNotRec }: { onOpen: () => void; onOpenNotRec: () => void }) {
   return (
     <>
       <button
@@ -572,61 +660,23 @@ function ProductBadges({ onOpen }: { onOpen: () => void }) {
       >
         <img src={`${A}chatblob.png`} alt="" className="size-[28px] object-contain" />
       </button>
-      <div
+      <button
+        onClick={onOpenNotRec}
         className="absolute flex items-center justify-center rounded-full bg-[#9d9d9d]"
         style={{ left: 1184, top: 101, width: 45, height: 45 }}
+        aria-label="See why this isn't recommended"
       >
         <img src={`${A}chatcircle.svg`} alt="" className="size-[28px]" />
-      </div>
-      <div
+      </button>
+      <button
+        onClick={onOpenNotRec}
         className="absolute flex items-center justify-center rounded-full bg-[#9d9d9d]"
         style={{ left: 387, top: 100, width: 45, height: 45 }}
+        aria-label="See why this isn't recommended"
       >
         <img src={`${A}chatcircle.svg`} alt="" className="size-[28px]" />
-      </div>
+      </button>
     </>
-  )
-}
-
-/* -------------------------------------------------------------- Navi bar */
-function NaviBar({ onChat }: { onChat: () => void }) {
-  const iconBtn = (src: string, label: string, onClick?: () => void) => (
-    <button onClick={onClick} aria-label={label} className="size-[40px]">
-      <img src={src} alt="" className="size-full" />
-    </button>
-  )
-  return (
-    <div
-      className="absolute flex items-center rounded-[8px] border-[0.5px] border-border-subtle bg-white p-[10px] drop-shadow-[0px_0px_7.5px_rgba(5,5,0,0.16)]"
-      style={{ left: 51, top: 523 }}
-    >
-      <div className="flex flex-col items-start gap-[16px]">
-        <div className="flex flex-col items-start gap-[16px]">
-          {iconBtn(`${A}navi-chat.svg`, 'Chat', onChat)}
-          {iconBtn(`${A}navi-heart.svg`, 'Saved')}
-        </div>
-        <div className="h-[0.5px] w-full bg-border-subtle" />
-        <div className="flex flex-col items-start gap-[16px]">
-          {iconBtn(`${A}navi-gear.svg`, 'Settings')}
-          {iconBtn(`${A}navi-question.svg`, 'Help')}
-        </div>
-      </div>
-    </div>
-  )
-}
-
-/* --------------------------------------------------------- CR launcher */
-/** Green launcher matching the Product Insights frame (1052:2542) — bg brand + white "C". */
-function InsightsLauncher() {
-  return (
-    <div className="absolute" style={{ left: 52, top: 792 }}>
-      <div className="relative size-[60px] rounded-[8px] bg-brand">
-        <span className="absolute left-[18px] top-[7px] text-[32px] font-semibold leading-[36px] tracking-[-1.5px] text-white">
-          C
-        </span>
-        <span className="absolute left-[51px] top-[-4px] size-[14px] rounded-full border-2 border-white bg-rating-excellent" />
-      </div>
-    </div>
   )
 }
 
@@ -673,10 +723,10 @@ function StateSwitcher({
 /* ============================================================ Screen */
 export function ProductInsightsScreen() {
   const [params, setParams] = useSearchParams()
+  const navigate = useNavigate()
   const variant = (params.get('v') as Variant) || 'recommended'
   const setVariant = (v: Variant) => setParams({ v }, { replace: true })
 
-  const showNavi = variant !== 'collapsed'
   const showRecommended = variant === 'recommended' || variant === 'expanded' || variant === 'tooltip'
 
   // Fetch live product_insights on load. Until it returns (or if the backend is unreachable),
@@ -706,11 +756,23 @@ export function ProductInsightsScreen() {
 
   const frame: ReactNode = (
     <FigmaFrame backdrop={bg} backdropOpacity={0.7}>
-      <ProductBadges onOpen={() => setVariant('recommended')} />
+      {/* Click anywhere on the retail page (behind the panels/badges/launcher) to open the
+          inline-annotation experience — it starts with a short tooltip intro. */}
+      <button
+        aria-label="Highlight a claim on the page"
+        onClick={() => navigate(`${routes.annotations}?intro=1`)}
+        className="absolute inset-0 cursor-pointer"
+      />
+
+      <ProductBadges
+        onOpen={() => setVariant('recommended')}
+        onOpenNotRec={() => setVariant('notrec')}
+      />
 
       {showRecommended && (
-        <RecommendedPanel
+        <InsightPanel
           key={variant}
+          verdict="recommended"
           initialExpanded={variant === 'expanded' ? 0 : null}
           initialTooltip={variant === 'tooltip'}
           onClose={() => setVariant('collapsed')}
@@ -719,11 +781,18 @@ export function ProductInsightsScreen() {
         />
       )}
 
-      {variant === 'notrec' && <NotRecommendedPanel onClose={() => setVariant('collapsed')} />}
+      {variant === 'notrec' && (
+        <InsightPanel
+          verdict="notrec"
+          initialExpanded={null}
+          initialTooltip={false}
+          onClose={() => setVariant('collapsed')}
+          rows={notRecRows}
+          preferences={preferences}
+        />
+      )}
 
-      {showNavi && <NaviBar onChat={() => setVariant('recommended')} />}
-
-      <InsightsLauncher />
+      <NaviRail forceOpen={variant === 'menu'} />
 
       <StateSwitcher current={variant} onSelect={setVariant} />
     </FigmaFrame>

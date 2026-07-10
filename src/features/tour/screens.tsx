@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { FigmaFrame } from '@/layouts/FigmaFrame'
+import { NaviRail } from '@/components/connie/NaviRail'
 import { routes } from '@/app/routes'
 
 /* ---------- Tour asset paths (public/figma, prefix "tour-") ---------- */
@@ -20,7 +21,7 @@ function AmazonBackdrop() {
       alt=""
       src={AMAZON_BG}
       className="pointer-events-none absolute object-cover"
-      style={{ left: -200, top: 0, width: 1640, height: 1024, opacity: 0.4 }}
+      style={{ left: -110, top: 0, width: 1720, height: 1074, opacity: 0.4 }}
     />
   )
 }
@@ -47,20 +48,6 @@ function Launcher({ style, highlighted = false }: { style?: CSSProperties; highl
         <span className="absolute left-[51px] top-[-4px] size-[14px] rounded-full border-2 border-white bg-[#4dcc73]" />
       </div>
     </div>
-  )
-}
-
-/* ---------- Tutorial-state Navi bar (screenshot of the Figma component) ---------- */
-function NaviBar({ left, top }: { left: number; top: number }) {
-  // The exported node (1052:5277) is 90×274 with the drop-shadow bleed; the visible
-  // white box is inset ~15px left / ~14px top. Offset so the box lands at (left, top).
-  return (
-    <img
-      alt=""
-      src={NAVIBAR}
-      className="absolute"
-      style={{ left: left - 15, top: top - 14, width: 90, height: 274 }}
-    />
   )
 }
 
@@ -232,13 +219,13 @@ export function TourScreen() {
   const navigate = useNavigate()
   const skip = () => navigate(routes.insights)
   const next = () => {
-    if (step >= 4) navigate(routes.insights)
+    if (step >= 3) navigate(routes.insights)
     else setStep(step + 1)
   }
   const active = Math.min(step, 2)
 
-  /* ---- Step 5 (T4) — inline annotation over a product-detail page ---- */
-  if (step === 4) {
+  /* ---- Step 4 (T4) — inline annotation over a product-detail page ---- */
+  if (step === 3) {
     return (
       <FigmaFrame>
         <DetailBackdrop />
@@ -272,8 +259,6 @@ export function TourScreen() {
           <ArrowRight />
         </div>
 
-        <NaviBar left={51} top={523} />
-
         {/* Bottom control — single "Got it ✓" pill */}
         <div
           className="absolute flex w-[143px] items-center overflow-clip rounded-[999px] bg-white px-[22px] py-[12px]"
@@ -287,7 +272,7 @@ export function TourScreen() {
           </button>
         </div>
 
-        <Launcher style={{ left: 52, top: 792 }} />
+        <NaviRail />
       </FigmaFrame>
     )
   }
@@ -317,7 +302,7 @@ export function TourScreen() {
 
       {/* Step 1 tooltip — below the card, arrow up */}
       {step === 0 && (
-        <div className="absolute flex flex-col items-start" style={{ left: 696, top: 582 }}>
+        <div className="absolute flex flex-col items-start" style={{ left: 696, top: 510 }}>
           <ArrowUp style={{ marginLeft: 32 }} />
           <Bubble
             title="Connie stars the picks that fit you"
@@ -329,7 +314,7 @@ export function TourScreen() {
 
       {/* Step 2 tooltip — beside the badge, arrow up */}
       {step === 1 && (
-        <div className="absolute flex flex-col items-start" style={{ left: 788, top: 174 }}>
+        <div className="absolute flex flex-col items-start" style={{ left: 778, top: 164 }}>
           <ArrowUp style={{ marginLeft: 32 }} />
           <Bubble
             title="Tap a star for CR's take"
@@ -339,16 +324,13 @@ export function TourScreen() {
         </div>
       )}
 
-      {/* Step 3 — reveal the Navi bar (no bubble) */}
-      {step === 2 && <NaviBar left={52} top={524} />}
-
-      {/* Step 4 — tooltip beside the launcher, arrow left */}
-      {step === 3 && (
-        <div className="absolute flex items-center" style={{ left: 152, top: 764 }}>
+      {/* Step 3 — reveal the Navi bar AND the tooltip beside the launcher, together */}
+      {step === 2 && (
+        <div className="absolute flex items-center" style={{ left: 152, top: 690 }}>
           <ArrowLeft />
           <Bubble
             title="Open Connie anytime"
-            body="Your panel lives on the left, hover over the icon to see menu."
+            body="Your panel lives on the left. Hover the C to open the menu — chat, saved, settings, help."
             gap={0}
             bodyMuted
           />
@@ -364,7 +346,7 @@ export function TourScreen() {
         onNext={next}
       />
 
-      <Launcher style={{ left: 52, top: 792 }} highlighted={step === 3} />
+      <NaviRail forceOpen={step === 2} highlighted={step === 2} />
     </FigmaFrame>
   )
 }

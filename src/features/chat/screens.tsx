@@ -11,6 +11,7 @@ import {
   isProductInsights,
   type ConnieResponse,
 } from '@/types/connie-contract'
+import { NaviRail } from '@/components/connie/NaviRail'
 
 /* Chat 4 — Post-purchase in chat (1052:5908).
    The Figma frame is an empty placeholder, so this reproduces the "post-purchase
@@ -40,37 +41,6 @@ function Backdrop() {
           className="absolute max-w-none"
           style={{ left: '-14.65%', top: '-17.12%', width: '117.12%', height: '117.12%' }}
         />
-      </div>
-    </div>
-  )
-}
-
-function NaviRail() {
-  return (
-    <div
-      className="absolute flex items-center rounded-[8px] border-[0.5px] border-border-subtle bg-white p-[10px] shadow-[0px_0px_7.5px_0px_rgba(5,5,0,0.16)]"
-      style={{ left: 62, top: 300 }}
-    >
-      <div className="flex flex-col items-start gap-[16px]">
-        <div className="flex flex-col items-start gap-[16px]">
-          <div className="relative size-[40px]">
-            <img alt="" src={asset.naviChat} className="absolute inset-0 block size-full" />
-          </div>
-          <div className="relative size-[40px]">
-            <img alt="" src={asset.naviHeart} className="absolute inset-0 block size-full" />
-          </div>
-        </div>
-        <div className="relative h-0 w-full">
-          <img alt="" src={asset.naviLine} className="block h-[2px] w-full" />
-        </div>
-        <div className="flex flex-col items-start gap-[16px]">
-          <div className="relative size-[40px]">
-            <img alt="" src={asset.naviGear} className="absolute inset-0 block size-full" />
-          </div>
-          <div className="relative size-[40px]">
-            <img alt="" src={asset.naviQuestion} className="absolute inset-0 block size-full" />
-          </div>
-        </div>
       </div>
     </div>
   )
@@ -277,7 +247,7 @@ export function ChatScreen() {
   return (
     <FigmaFrame bg="#f1f1f2">
       <Backdrop />
-      <NaviRail />
+      <NaviRail active="chat" />
 
       <div
         className="absolute flex flex-col items-start overflow-clip rounded-md border border-border-subtle bg-bg-primary p-[36px] shadow-panel"
