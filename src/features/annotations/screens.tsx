@@ -210,27 +210,18 @@ function LiveSources({ evidence }: { evidence: Evidence[] }) {
 /* ---------- Exported screen ---------- */
 export function AnnotationsScreen() {
   const [params, setParams] = useSearchParams()
-  const initial = (params.get('state') as StateKey) || 'base'
-  const [state, setStateRaw] = useState<StateKey>(
-    STATE_ORDER.some((s) => s.key === initial) ? initial : 'base',
-  )
 
-  const setState = (s: StateKey) => {
-    setStateRaw(s)
-    const next = new URLSearchParams(params)
-    next.set('state', s)
-    setParams(next, { replace: true })
-  }
-
-  // Intro tooltip — shown once when arriving from the Product Insights page, before the callouts.
+  // Intro tooltip — shown once when arriving from the Product Insights page, before the callout.
   const [intro, setIntro] = useState(params.get('intro') === '1')
   const dismissIntro = () => {
     setIntro(false)
     const next = new URLSearchParams(params)
     next.delete('intro')
-    next.set('state', 'base')
     setParams(next, { replace: true })
   }
+
+  // On the base screen, hovering the highlighted claim reveals the misleading-claim callout.
+  const [showMisleading, setShowMisleading] = useState(false)
 
   // Fetch live inline annotations once; index them by verdict so each callout can use its own.
   const [annById, setAnnById] = useState<Record<string, InlineAnnotation>>({})
@@ -250,10 +241,7 @@ export function AnnotationsScreen() {
         /* keep baked callouts on error */
       })
   }, [])
-  const annBoth = annById['verified_by_both']
-  const annComm = annById['verified_by_community_only']
   const annMis = annById['misleading']
-  const annUnv = annById['unverifiable']
 
   /* ---- Intro coach mark (arrives from Product Insights via ?intro=1) ---- */
   if (intro) {
@@ -315,98 +303,29 @@ export function AnnotationsScreen() {
   }
 
   return (
-    <FigmaFrame backdrop={asset.backdrop} backdropOpacity={state === 'base' ? 1 : 0.7}>
-      {/* Highlighted claim(s) on the retailer page */}
-      {(state === 'base' || state === 'misleading') && (
-        <Highlight left={597} top={569} width={248} color="#ae0d00" opacity={0.3} />
-      )}
-      {state === 'verified-both' && (
-        <Highlight left={601} top={570} width={244} color="#00803e" />
-      )}
-      {state === 'verified-community' && (
-        <>
-          <Highlight left={598} top={401} width={368} color="#003866" />
-          <Highlight left={601} top={570} width={244} color="rgba(0,128,62,0.2)" />
-        </>
-      )}
-      {state === 'unverifiable' && (
-        <Highlight left={598} top={570} width={249} color="#ffa500" />
-      )}
-
-      {/* Verified — CR + community (1052:2759) */}
-      {state === 'verified-both' && (
-        <Callout
-          style={{ left: 802, top: 598 }}
-          icon={asset.check}
-          title={annBoth?.verdict_label ?? 'Verified claim'}
-          subtitle={annBoth?.explanation ?? 'Matches what our testers and real users are saying. '}
-          onClose={() => setState('base')}
-        >
-          {annBoth ? (
-            <LiveSources evidence={annBoth.evidence} />
-          ) : (
-            <SourceRow>
-              <SourceCard
-                avatar={asset.avatarCr}
-                name="Consumer Reports "
-                quote={crPaddingQuote}
-                chip="Baby Trend Stroller Review"
-              />
-              <SourceCard
-                avatar={asset.avatarReddit}
-                name="Reddit"
-                quote={redditComfyQuote}
-                chip="Best Strollers: Thread"
-              />
-            </SourceRow>
-          )}
-        </Callout>
-      )}
-
-      {/* Verified — community, not CR (1052:2806) */}
-      {state === 'verified-community' && (
-        <Callout
-          style={{ left: 802, top: 598 }}
-          icon={asset.check}
-          title={annComm?.verdict_label ?? 'Verified claim'}
-          subtitle={
-            annComm?.explanation ??
-            "Our testers haven't reviewed this product, but it matches what real users are saying."
-          }
-          onClose={() => setState('base')}
-        >
-          {annComm ? (
-            <LiveSources evidence={annComm.evidence} />
-          ) : (
-            <SourceRow>
-              <SourceCard
-                avatar={asset.avatarReddit}
-                name="Reddit"
-                quote={redditComfyQuoteAlt}
-                chip="Best Strollers: Thread"
-                fixed={false}
-              />
-              <SourceCard
-                avatar={asset.avatarInstagram}
-                name="Instagram"
-                quote={instagramQuote}
-                chip="@dad_at_home’s post"
-                ring={false}
-                fixed={false}
-              />
-            </SourceRow>
-          )}
-        </Callout>
-      )}
+    <FigmaFrame backdrop={asset.backdrop} backdropOpacity={showMisleading ? 0.7 : 1}>
+      {/* Highlighted claim on the page — hovering it reveals the misleading-claim callout;
+          moving off it returns to the base screen. No black border in either state. */}
+      <div
+        className="absolute cursor-pointer"
+        style={{ left: 579, top: 563, width: 276, height: 34 }}
+        onMouseEnter={() => setShowMisleading(true)}
+        onMouseLeave={() => setShowMisleading(false)}
+      >
+        <div
+          className="absolute rounded-[4px]"
+          style={{ left: 18, top: 6, width: 248, height: 21, background: '#ae0d00', opacity: 0.3 }}
+        />
+      </div>
 
       {/* Misleading — CR + community (1052:2717) */}
-      {state === 'misleading' && (
+      {showMisleading && (
         <Callout
           style={{ left: 802, top: 598 }}
           icon={asset.xcircle}
           title={annMis?.verdict_label ?? 'Misleading claim'}
           subtitle={annMis?.explanation ?? "Doesn't match what our testers and real users are saying."}
-          onClose={() => setState('base')}
+          onClose={() => setShowMisleading(false)}
         >
           {annMis ? (
             <LiveSources evidence={annMis.evidence} />
@@ -429,45 +348,7 @@ export function AnnotationsScreen() {
         </Callout>
       )}
 
-      {/* Unable to verify (1052:2855) — offset callout at left 741 / top 609 */}
-      {state === 'unverifiable' && (
-        <Callout
-          style={{ left: 741, top: 609 }}
-          icon={asset.question}
-          title={annUnv?.verdict_label ?? 'Unable to verify claim'}
-          subtitle={
-            annUnv?.explanation ??
-            'Connie didn’t have enough info to confirm or dispute this claim. Add more trusted sources to help verify it.'
-          }
-          onClose={() => setState('base')}
-        >
-          <div className="flex w-full flex-col items-center gap-[12px] py-[8px]">
-            <button className="flex flex-col items-start rounded-[48px] bg-[#404040] px-[24px] py-[8px]">
-              <span className="whitespace-nowrap text-[14px] font-semibold leading-[24px] text-white">
-                Add more sources
-              </span>
-            </button>
-          </div>
-        </Callout>
-      )}
-
       <NaviRail />
-
-      {/* Dev control — switch between the five states (not part of the Figma frame) */}
-      <div className="fixed bottom-3 left-1/2 z-50 flex -translate-x-1/2 gap-[4px] rounded-pill border border-border-subtle bg-white/95 p-[4px] shadow-panel backdrop-blur">
-        {STATE_ORDER.map((s) => (
-          <button
-            key={s.key}
-            onClick={() => setState(s.key)}
-            className={cn(
-              'rounded-pill px-[12px] py-[4px] text-[12px] font-medium transition-colors',
-              state === s.key ? 'bg-brand text-white' : 'text-fg-secondary hover:text-fg-primary',
-            )}
-          >
-            {s.short}
-          </button>
-        ))}
-      </div>
     </FigmaFrame>
   )
 }

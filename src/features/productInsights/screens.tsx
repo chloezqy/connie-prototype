@@ -6,6 +6,8 @@ import { callConnie } from '@/api/connieClient'
 import { isProductInsights, type ProductInsightsPayload } from '@/types/connie-contract'
 import { usePreferences, preferencesToPriorities } from '@/store/usePreferences'
 import { NaviRail } from '@/components/connie/NaviRail'
+import { RetailBackdrop } from '@/components/connie/RetailBackdrop'
+import { IconHeart } from '@/components/icons'
 
 /** The product this "page" is about — drives the live product_insights request. */
 const LIVE_PRODUCT = 'UPPAbaby Vista V2'
@@ -439,7 +441,8 @@ function InsightPanel({
               </div>
               <button
                 onPointerDown={(e) => e.stopPropagation()}
-                onClick={() => setTooltip((t) => !t)}
+                onMouseEnter={() => setTooltip(true)}
+                onMouseLeave={() => setTooltip(false)}
                 aria-label="Based on"
                 className="size-[24px]"
               >
@@ -449,8 +452,8 @@ function InsightPanel({
             <button
               onPointerDown={(e) => e.stopPropagation()}
               onClick={() => setSaved((s) => !s)}
-              className={`flex h-[40px] w-[104px] items-center justify-center gap-[8px] rounded-[24px] border ${
-                saved ? 'border-brand bg-brand-muted' : 'border-border-subtle bg-white'
+              className={`flex h-[40px] w-[104px] items-center justify-center gap-[8px] rounded-[24px] border bg-white ${
+                saved ? 'border-brand' : 'border-border-subtle'
               }`}
             >
               <span
@@ -460,13 +463,17 @@ function InsightPanel({
               >
                 {saved ? 'Saved' : 'Save'}
               </span>
-              <img src={`${A}save.svg`} alt="" className="h-[12px] w-[14px]" />
+              <IconHeart
+                size={16}
+                className={saved ? 'text-fg-brand' : 'text-fg-secondary'}
+                style={saved ? { fill: 'currentColor' } : undefined}
+              />
             </button>
           </div>
         </div>
 
         {/* scrollable body — extra right gutter so the scrollbar isn't flush to the edge */}
-        <div className="scrollbar-thin mr-[10px] min-h-0 flex-1 overflow-y-auto pl-[36px] pr-[46px] pt-[16px]">
+        <div className="scrollbar-thin mr-[18px] min-h-0 flex-1 overflow-y-auto pl-[36px] pr-[38px] pt-[16px]">
           <div className="flex flex-col gap-[16px]">
             <div className="flex flex-col gap-[24px]">
               {/* DID YOU KNOW — inside the card */}
@@ -512,17 +519,17 @@ function InsightPanel({
         </div>
 
         {/* footer */}
-        <div className="shrink-0 pb-[24px] pl-[36px] pr-[56px]">
-          <div className="flex w-full items-center justify-center gap-[12px] border-t border-border-subtle py-[12px]">
-            <span className="whitespace-nowrap text-[14px] font-semibold leading-[20px] text-[#585858]">
+        <div className="shrink-0 pb-[12px] pl-[36px] pr-[56px]">
+          <div className="flex w-full items-center justify-center gap-[10px] border-t border-border-subtle py-[8px]">
+            <span className="whitespace-nowrap text-[12px] font-semibold leading-[16px] text-[#585858]">
               LIKE THIS REC?
             </span>
-            <div className="flex gap-[8px]">
-              <button className="flex size-[40px] items-center justify-center rounded-full border border-border-subtle bg-white">
-                <img src={`${A}thumbup.svg`} alt="Like" className="h-[16.667px] w-[17.5px]" />
+            <div className="flex gap-[6px]">
+              <button className="flex size-[30px] items-center justify-center rounded-full border border-border-subtle bg-white">
+                <img src={`${A}thumbup.svg`} alt="Like" className="h-[13px] w-[13.7px]" />
               </button>
-              <button className="flex size-[40px] items-center justify-center rounded-full border border-border-subtle bg-white">
-                <img src={`${A}thumbdown.svg`} alt="Dislike" className="h-[16.667px] w-[17.5px]" />
+              <button className="flex size-[30px] items-center justify-center rounded-full border border-border-subtle bg-white">
+                <img src={`${A}thumbdown.svg`} alt="Dislike" className="h-[13px] w-[13.7px]" />
               </button>
             </div>
           </div>
@@ -654,7 +661,7 @@ function ProductBadges({ onOpen, onOpenNotRec }: { onOpen: () => void; onOpenNot
     <>
       <button
         onClick={onOpen}
-        className="absolute flex items-center justify-center rounded-full bg-rating-excellent"
+        className="pointer-events-auto absolute flex items-center justify-center rounded-full bg-rating-excellent"
         style={{ left: 796, top: 101, width: 45, height: 45 }}
         aria-label="Open Connie insights"
       >
@@ -662,16 +669,16 @@ function ProductBadges({ onOpen, onOpenNotRec }: { onOpen: () => void; onOpenNot
       </button>
       <button
         onClick={onOpenNotRec}
-        className="absolute flex items-center justify-center rounded-full bg-[#9d9d9d]"
-        style={{ left: 1184, top: 101, width: 45, height: 45 }}
+        className="pointer-events-auto absolute flex items-center justify-center rounded-full bg-[#9d9d9d]"
+        style={{ left: 1215, top: 101, width: 45, height: 45 }}
         aria-label="See why this isn't recommended"
       >
         <img src={`${A}chatcircle.svg`} alt="" className="size-[28px]" />
       </button>
       <button
         onClick={onOpenNotRec}
-        className="absolute flex items-center justify-center rounded-full bg-[#9d9d9d]"
-        style={{ left: 387, top: 100, width: 45, height: 45 }}
+        className="pointer-events-auto absolute flex items-center justify-center rounded-full bg-[#9d9d9d]"
+        style={{ left: 356, top: 100, width: 45, height: 45 }}
         aria-label="See why this isn't recommended"
       >
         <img src={`${A}chatcircle.svg`} alt="" className="size-[28px]" />
@@ -755,15 +762,17 @@ export function ProductInsightsScreen() {
   const panelRows = liveRows ?? rows
 
   const frame: ReactNode = (
-    <FigmaFrame backdrop={bg} backdropOpacity={0.7}>
-      {/* Click anywhere on the retail page (behind the panels/badges/launcher) to open the
-          inline-annotation experience — it starts with a short tooltip intro. */}
+    <FigmaFrame>
+      {/* Click anywhere on the retail page (behind the retail group / panels / launcher) to open
+          the inline-annotation experience — it starts with a short tooltip intro. */}
       <button
         aria-label="Highlight a claim on the page"
         onClick={() => navigate(`${routes.annotations}?intro=1`)}
         className="absolute inset-0 cursor-pointer"
       />
 
+      {/* Shared retail backdrop + product badges pinned to their products. */}
+      <RetailBackdrop />
       <ProductBadges
         onOpen={() => setVariant('recommended')}
         onOpenNotRec={() => setVariant('notrec')}
@@ -793,8 +802,6 @@ export function ProductInsightsScreen() {
       )}
 
       <NaviRail forceOpen={variant === 'menu'} />
-
-      <StateSwitcher current={variant} onSelect={setVariant} />
     </FigmaFrame>
   )
 

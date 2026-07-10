@@ -3,6 +3,7 @@ import type { CSSProperties, ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { FigmaFrame } from '@/layouts/FigmaFrame'
 import { NaviRail } from '@/components/connie/NaviRail'
+import { RetailBackdrop } from '@/components/connie/RetailBackdrop'
 import { routes } from '@/app/routes'
 
 /* ---------- Tour asset paths (public/figma, prefix "tour-") ---------- */
@@ -219,68 +220,15 @@ export function TourScreen() {
   const navigate = useNavigate()
   const skip = () => navigate(routes.insights)
   const next = () => {
-    if (step >= 3) navigate(routes.insights)
+    if (step >= 2) navigate(routes.insights)
     else setStep(step + 1)
   }
   const active = Math.min(step, 2)
 
-  /* ---- Step 4 (T4) — inline annotation over a product-detail page ---- */
-  if (step === 3) {
-    return (
-      <FigmaFrame>
-        <DetailBackdrop />
-
-        {/* Highlighted text line the user "pointed to" */}
-        <div
-          className="absolute rounded-[4px]"
-          style={{ left: 597, top: 569, width: 248, height: 21, opacity: 0.3, background: '#ae0d00' }}
-        />
-        <div
-          className="absolute rounded-[4px]"
-          style={{ left: 579, top: 565, width: 276, height: 30, border: '2.5px solid #050500' }}
-        />
-
-        {/* Annotation bubble + arrow pointing right toward the highlight */}
-        <div className="absolute flex items-center" style={{ left: 154, top: 480 }}>
-          <div
-            className="flex w-[397px] flex-col items-start gap-[18px] overflow-clip rounded-[16px] bg-fg-primary p-[28px]"
-            style={{ boxShadow: '0px 10px 28px 0px rgba(0,0,0,0.22)' }}
-          >
-            <div className="flex items-start rounded-[999px] bg-bg-primary px-[12px] py-[5px]">
-              <p className="whitespace-nowrap text-[12px] font-semibold leading-[16px] text-fg-primary">
-                INLINE ANNOTATION
-              </p>
-            </div>
-            <p className="text-[16px] font-normal leading-[24px] text-fg-inverse">
-              Highlight anything you're unsure about. Connie only checks what you point to and searches CR's
-              tests and community live,&nbsp; so the colored flags appear after you highlight.
-            </p>
-          </div>
-          <ArrowRight />
-        </div>
-
-        {/* Bottom control — single "Got it ✓" pill */}
-        <div
-          className="absolute flex w-[143px] items-center overflow-clip rounded-[999px] bg-white px-[22px] py-[12px]"
-          style={{ left: 647, top: 794, boxShadow: PILL_SHADOW }}
-        >
-          <button
-            onClick={next}
-            className="flex h-[48px] flex-1 items-center justify-center rounded-[48px] bg-brand text-[16px] font-semibold text-fg-inverse"
-          >
-            Got it ✓
-          </button>
-        </div>
-
-        <NaviRail />
-      </FigmaFrame>
-    )
-  }
-
-  /* ---- Steps 1–4 — over the Amazon product grid ---- */
+  /* ---- Steps 1–3 — over the Amazon product grid ---- */
   return (
     <FigmaFrame>
-      <AmazonBackdrop />
+      <RetailBackdrop />
 
       {/* Step 1 & 2 — highlight the middle product card + star badge */}
       {(step === 0 || step === 1) && (

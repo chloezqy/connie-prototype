@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { FigmaFrame } from '@/layouts/FigmaFrame'
+import { RetailBackdrop } from '@/components/connie/RetailBackdrop'
 import { routes } from '@/app/routes'
 import { callConnie } from '@/api/connieClient'
 import { isPriorityInference } from '@/types/connie-contract'
@@ -320,17 +321,26 @@ export function PriorityInferenceScreen() {
   const [chosenCommute, setChosenCommute] = useState<string | null>(
     initial >= 7 ? 'Mostly public transit' : null,
   )
+  // After a selection, highlight the chip immediately, then reveal the next question / priority
+  // change after ~800ms — matching the post-purchase "after delay" interaction.
+  const timerRef = useRef<number | null>(null)
+  useEffect(() => () => { if (timerRef.current) window.clearTimeout(timerRef.current) }, [])
+  const answerAfter = (n: number) => {
+    if (timerRef.current) window.clearTimeout(timerRef.current)
+    timerRef.current = window.setTimeout(() => go(n), 800)
+  }
   const answerLiving = (label: string) => {
     setChosenLiving(label)
-    go(4)
+    answerAfter(4)
   }
   const answerCommute = (label: string) => {
     setChosenCommute(label)
-    go(7)
+    answerAfter(7)
   }
 
   return (
-    <FigmaFrame backdrop={asset.amazonBg} backdropOpacity={0.4}>
+    <FigmaFrame>
+      <RetailBackdrop />
       {/* Aside — Floating Bubble Panel (right, 16px inset, full height) */}
       <div
         className="absolute flex flex-col items-start overflow-clip rounded-[16px] border border-border-subtle bg-bg-secondary p-px shadow-panel"

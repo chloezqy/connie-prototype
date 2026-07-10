@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode, type CSSProperties } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { FigmaFrame } from '@/layouts/FigmaFrame'
+import { RetailBackdrop } from '@/components/connie/RetailBackdrop'
 import { routes } from '@/app/routes'
 import { callConnie } from '@/api/connieClient'
 import {
@@ -213,6 +214,51 @@ const cards: Card[] = [
     whyLong:
       'Excellent for your secondary need for compact storage. One-hand quick fold outperforms competitors in tight trunks.',
     chips: [{ img: asset.avCr, label: 'Safety Certification' }],
+    primaryBtn: false,
+  },
+  {
+    id: 'lite3',
+    img: asset.prodCity,
+    rank: '#3 BUDGET PICK',
+    rankBrand: false,
+    title: 'GB Pockit Lite 3',
+    price: '$199.00',
+    at: 'AT TARGET',
+    why: 'The lightest option on your list — great for travel, though CR flags it as not recommended for daily rough-terrain use.',
+    whyLong:
+      'The lightest option on your list — great for travel, though CR flags it as not recommended for daily rough-terrain use. Best kept as a secondary stroller.',
+    chips: [{ img: asset.avReddit, label: 'Travel Thread' }],
+    primaryBtn: false,
+  },
+  {
+    id: 'mockingbird',
+    img: asset.prodVista,
+    rank: '#4 VALUE',
+    rankBrand: false,
+    title: 'Mockingbird Single-to-Double',
+    price: '$650.00',
+    at: 'AT MOCKINGBIRD',
+    why: 'Strong all-around value with an expandable frame. Parents praise the ride quality for the price.',
+    whyLong:
+      'Strong all-around value with an expandable frame. Parents praise the ride quality for the price, and it converts to a double later.',
+    chips: [
+      { img: asset.avCr, label: 'CR 2024 Lab Results' },
+      { img: asset.avReddit, label: 'Reddit Community' },
+    ],
+    primaryBtn: false,
+  },
+  {
+    id: 'cruz',
+    img: asset.prodVista,
+    rank: '#5 COMPACT',
+    rankBrand: false,
+    title: 'UppaBaby Cruz V2',
+    price: '$699.00',
+    at: 'AT AMAZON',
+    why: 'A lighter, single-seat sibling to the Vista with the same trusted build — a good fit for smaller trunks.',
+    whyLong:
+      'A lighter, single-seat sibling to the Vista with the same trusted build — a good fit for smaller trunks and city living.',
+    chips: [{ img: asset.avCr, label: 'CR 2024 Lab Results' }],
     primaryBtn: false,
   },
 ]
@@ -1060,7 +1106,8 @@ export function DecisionSupportScreen() {
   const detailed = mode === 'detailed'
 
   return (
-    <FigmaFrame backdrop={bg} backdropOpacity={0.4}>
+    <FigmaFrame>
+      <RetailBackdrop />
       {/* Connie floating panel */}
       <div
         className="absolute flex flex-col overflow-clip rounded-[16px] border border-border-subtle bg-bg-secondary p-[37px] shadow-[0px_0px_15px_0px_rgba(0,0,0,0.16)]"
@@ -1169,8 +1216,6 @@ export function DecisionSupportScreen() {
       )}
 
       <NaviRail active="saved" />
-
-      <StateSwitcher current={stateKey} onSelect={onState} />
     </FigmaFrame>
   )
 }

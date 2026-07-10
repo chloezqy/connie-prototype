@@ -23,7 +23,10 @@ import { ChatScreen } from '@/features/chat/screens'
 import { TourScreen } from '@/features/tour/screens'
 
 export const router = createBrowserRouter([
-  { path: '/', element: <FlowMenu /> },
+  // The default screen starts the real flow (Chrome Web Store install).
+  { path: '/', element: <InstallScreen /> },
+  // The screen-gallery / clickthrough menu lives on its own sub-page now.
+  { path: '/navigation', element: <FlowMenu /> },
 
   { path: routes.install, element: <InstallScreen /> },
   { path: routes.welcome, element: <WelcomeScreen /> },
