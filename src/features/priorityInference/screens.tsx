@@ -3,6 +3,10 @@ import type { ReactNode } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { FigmaFrame } from '@/layouts/FigmaFrame'
 import { routes } from '@/app/routes'
+import { callConnie } from '@/api/connieClient'
+import { isPriorityInference } from '@/types/connie-contract'
+
+const DEFAULT_PRIORITIES = ['Safety', 'Durability', 'Easy Fold', 'Lightweight']
 
 /* Shared Amazon browse backdrop (dimmed 40% over white — matches Figma "Amazon bg"). */
 const bg = '/figma/prio-amazon-bg.png'
@@ -228,13 +232,32 @@ function NaviBar() {
 
 /* ---------- Bento states ---------- */
 
-function BentoA() {
+/** Icon + sizing per priority label (live suggested_priorities map to these). */
+const PRIO_ICON: Record<string, { icon: string; w: number; h: number }> = {
+  Safety: { icon: asset.safety, w: 16, h: 20 },
+  Durability: { icon: asset.durability, w: 19.95, h: 21 },
+  'Easy Fold': { icon: asset.easyFold, w: 21.95, h: 21.95 },
+  Lightweight: { icon: asset.lightweight, w: 19.8, h: 19.8 },
+}
+
+function BentoA({ priorities }: { priorities: string[] }) {
   return (
     <Bento>
-      <BentoCard n={1} label="Safety" icon={asset.safety} iconW={16} iconH={20} tone="plain" pad={13} />
-      <BentoCard n={2} label="Durability" icon={asset.durability} iconW={19.95} iconH={21} tone="plain" pad={13} />
-      <BentoCard n={3} label="Easy Fold" icon={asset.easyFold} iconW={21.95} iconH={21.95} tone="plain" pad={13} />
-      <BentoCard n={4} label="Lightweight" icon={asset.lightweight} iconW={19.8} iconH={19.8} tone="plain" pad={13} />
+      {priorities.map((label, i) => {
+        const m = PRIO_ICON[label] ?? { icon: asset.safety, w: 16, h: 20 }
+        return (
+          <BentoCard
+            key={label}
+            n={i + 1}
+            label={label}
+            icon={m.icon}
+            iconW={m.w}
+            iconH={m.h}
+            tone="plain"
+            pad={13}
+          />
+        )
+      })}
     </Bento>
   )
 }
@@ -270,6 +293,28 @@ export function PriorityInferenceScreen() {
   const initial = Number.isNaN(raw) ? 1 : Math.min(8, Math.max(1, raw))
   const [step, setStep] = useState(initial)
   const scrollRef = useRef<HTMLDivElement>(null)
+
+  // Fetch Connie's inferred starting priorities once (guard against StrictMode double-invoke).
+  const [liveIntro, setLiveIntro] = useState<string | null>(null)
+  const [livePriorities, setLivePriorities] = useState<string[] | null>(null)
+  const didFetch = useRef(false)
+  useEffect(() => {
+    if (didFetch.current) return
+    didFetch.current = true
+    callConnie({ message: "I'm not sure what matters most to me in a stroller" })
+      .then((r) => {
+        if (isPriorityInference(r)) {
+          setLiveIntro(r.priority_inference.message)
+          if (r.priority_inference.suggested_priorities.length > 0) {
+            setLivePriorities(r.priority_inference.suggested_priorities)
+          }
+        }
+      })
+      .catch(() => {
+        /* keep baked content on error */
+      })
+  }, [])
+  const priorities = livePriorities ?? DEFAULT_PRIORITIES
 
   const go = (n: number) => {
     const c = Math.min(8, Math.max(1, n))
@@ -343,10 +388,10 @@ export function PriorityInferenceScreen() {
             <>
               <Group>
                 <Bubble>
-                  Since you're shopping for a stroller, I've started with the priorities most parents
-                  care about. These are just a starting point — I'll tailor them to your situation.
+                  {liveIntro ??
+                    "Since you're shopping for a stroller, I've started with the priorities most parents care about. These are just a starting point — I'll tailor them to your situation."}
                 </Bubble>
-                <BentoA />
+                <BentoA priorities={priorities} />
               </Group>
 
               <Group>
