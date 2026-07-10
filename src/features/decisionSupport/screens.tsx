@@ -10,6 +10,7 @@ import {
   type ProductInsightsPayload,
 } from '@/types/connie-contract'
 import { usePreferences, preferencesToPriorities } from '@/store/usePreferences'
+import { cleanEvidence } from '@/lib/sourceFilter'
 
 /* ------------------------------------------------------------------ *
  * Decision Support — faithful reproduction of Figma frames
@@ -771,10 +772,13 @@ const DEEP_DIVE_ICON: Record<string, { icon: string; size: number }> = {
   comfort: { icon: `${I}cloud.svg`, size: 20 },
 }
 function insightsToDetailRows(payload: ProductInsightsPayload): DetailRow[] {
-  return payload.insights.map((ins) => {
-    const meta = DEEP_DIVE_ICON[ins.category] ?? { icon: `${I}toprated.svg`, size: 20 }
-    return { icon: meta.icon, iconSize: meta.size, title: ins.label, subtitle: ins.summary }
-  })
+  return payload.insights
+    // Same rule as Product Insights: no insight without real (non-youtube/competitor) evidence.
+    .filter((ins) => cleanEvidence(ins.evidence ?? []).length > 0)
+    .map((ins) => {
+      const meta = DEEP_DIVE_ICON[ins.category] ?? { icon: `${I}toprated.svg`, size: 20 }
+      return { icon: meta.icon, iconSize: meta.size, title: ins.label, subtitle: ins.summary }
+    })
 }
 
 function DeepDiveRow({ row, first, last }: { row: DetailRow; first: boolean; last: boolean }) {
@@ -822,10 +826,12 @@ function DeepDiveRow({ row, first, last }: { row: DetailRow; first: boolean; las
 function DetailedDeepDive({ onBack, product }: { onBack: () => void; product?: string | null }) {
   // Fetch the full review (product_insights) for the reviewed product, once.
   const [liveRows, setLiveRows] = useState<DetailRow[] | null>(null)
+  const [loading, setLoading] = useState(false)
   const didFetch = useRef(false)
   useEffect(() => {
     if (didFetch.current || !product) return
     didFetch.current = true
+    setLoading(true)
     callConnie({ message: `What are the key insights on the ${product}?` })
       .then((r) => {
         if (isProductInsights(r) && r.product_insights.insights.length > 0) {
@@ -835,6 +841,7 @@ function DetailedDeepDive({ onBack, product }: { onBack: () => void; product?: s
       .catch(() => {
         /* keep baked rows on error */
       })
+      .finally(() => setLoading(false))
   }, [product])
   const rows = liveRows ?? detailRows
 
@@ -870,6 +877,11 @@ function DetailedDeepDive({ onBack, product }: { onBack: () => void; product?: s
       </div>
 
       {/* rows */}
+      {loading && !liveRows && (
+        <p className="text-[13px] leading-[18px] text-fg-secondary">
+          Pulling {product ?? 'this stroller'}’s live review…
+        </p>
+      )}
       <div className="flex w-full flex-col">
         {rows.map((r, i) => (
           <DeepDiveRow key={r.title} row={r} first={i === 0} last={i === rows.length - 1} />
@@ -1051,7 +1063,7 @@ export function DecisionSupportScreen() {
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M15 6l-6 6 6 6" /></svg>
                 </button>
                 <div className="flex flex-col">
-                  <span className="text-[16px] font-semibold leading-[22px] text-fg-primary">{reviewProduct ?? 'UppaBaby Vista V2'}</span>
+                  <span className="text-[16px] font-semibold leading-[22px] text-fg-primary">{reviewProduct ?? topCard?.title ?? 'UppaBaby Vista V2'}</span>
                   <span className="text-[14px] leading-[20px] text-fg-secondary">Full Review Deep-dive</span>
                 </div>
               </div>
@@ -1059,7 +1071,7 @@ export function DecisionSupportScreen() {
                 <img src={asset.close} alt="" className="size-[16px]" />
               </button>
             </div>
-            <DetailedDeepDive onBack={() => setMode(null)} product={reviewProduct} />
+            <DetailedDeepDive onBack={() => setMode(null)} product={reviewProduct ?? topCard?.title} />
           </>
         ) : (
           <>
