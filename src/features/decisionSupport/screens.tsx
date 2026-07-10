@@ -11,6 +11,7 @@ import {
 } from '@/types/connie-contract'
 import { usePreferences, preferencesToPriorities } from '@/store/usePreferences'
 import { cleanEvidence } from '@/lib/sourceFilter'
+import { communityPosts, type CommunitySource } from '@/mocks/communityPosts'
 
 /* ------------------------------------------------------------------ *
  * Decision Support — faithful reproduction of Figma frames
@@ -790,19 +791,33 @@ const DD_LABEL: Record<string, string> = {
   web: 'Web',
   youtube: 'YouTube',
 }
+const DD_COMMUNITY_AVATAR: Record<CommunitySource, string> = {
+  Instagram: '/figma/comm-instagram.png',
+  Reddit: `${I}av5.png`,
+}
 
-function insightsToDetailRows(payload: ProductInsightsPayload): DetailRow[] {
+/** Same content as the Product Insights card: real CR/web evidence + connected community posts. */
+function insightsToDetailRows(payload: ProductInsightsPayload, connectedSources: string[]): DetailRow[] {
   return payload.insights
     // Same rule as Product Insights: no insight without real (non-youtube/competitor) evidence.
     .filter((ins) => cleanEvidence(ins.evidence ?? []).length > 0)
     .map((ins) => {
       const meta = DEEP_DIVE_ICON[ins.category] ?? { icon: `${I}toprated.svg`, size: 20 }
-      const sources = cleanEvidence(ins.evidence ?? []).map((e) => ({
+      const realSources = cleanEvidence(ins.evidence ?? []).map((e) => ({
         avatar: DD_AVATAR[e.source_type] ?? `${I}link.svg`,
         name: DD_LABEL[e.source_type] ?? e.source_name,
         quote: e.quote,
       }))
-      return { icon: meta.icon, iconSize: meta.size, title: ins.label, subtitle: ins.summary, sources }
+      const communitySources = (communityPosts[ins.category] ?? [])
+        .filter((p) => connectedSources.includes(p.source))
+        .map((p) => ({ avatar: DD_COMMUNITY_AVATAR[p.source], name: p.handle, quote: p.quote }))
+      return {
+        icon: meta.icon,
+        iconSize: meta.size,
+        title: ins.label,
+        subtitle: ins.summary,
+        sources: [...realSources, ...communitySources],
+      }
     })
 }
 
@@ -867,6 +882,7 @@ function DetailedDeepDive({ onBack, product }: { onBack: () => void; product?: s
   // Fetch the full review (product_insights) for the reviewed product, once.
   const [liveRows, setLiveRows] = useState<DetailRow[] | null>(null)
   const [loading, setLoading] = useState(false)
+  const connected = usePreferences((s) => s.sources)
   const didFetch = useRef(false)
   useEffect(() => {
     if (didFetch.current || !product) return
@@ -875,7 +891,7 @@ function DetailedDeepDive({ onBack, product }: { onBack: () => void; product?: s
     callConnie({ message: `What are the key insights on the ${product}?` })
       .then((r) => {
         if (isProductInsights(r) && r.product_insights.insights.length > 0) {
-          setLiveRows(insightsToDetailRows(r.product_insights))
+          setLiveRows(insightsToDetailRows(r.product_insights, connected))
         }
       })
       .catch(() => {
