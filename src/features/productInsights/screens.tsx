@@ -214,7 +214,8 @@ const COMMUNITY_AVATAR: Record<CommunitySource, string> = {
 function insightsToRows(payload: ProductInsightsPayload, connectedSources: string[]): RowData[] {
   return payload.insights.map((ins) => {
     const meta = CATEGORY_ICON[ins.category] ?? { icon: `${A}toprated.svg`, size: 20 }
-    const evidence = ins.evidence ?? []
+    // Drop any youtube evidence — not a real retrieval source, so never display it.
+    const evidence = (ins.evidence ?? []).filter((e) => e.source_type !== 'youtube')
     const realDetail = evidence.map((e) => ({
       source: e.source_name,
       text: e.quote,

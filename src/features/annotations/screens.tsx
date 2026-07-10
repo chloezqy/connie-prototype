@@ -210,10 +210,12 @@ const SOURCE_LABEL: Record<string, string> = {
 
 /** Renders a live annotation's evidence as source cards (falls back to nothing if empty). */
 function LiveSources({ evidence }: { evidence: Evidence[] }) {
-  if (evidence.length === 0) return null
+  // Drop youtube — not a real retrieval source, so never display it.
+  const shown = evidence.filter((e) => e.source_type !== 'youtube')
+  if (shown.length === 0) return null
   return (
     <SourceRow>
-      {evidence.slice(0, 2).map((e, i) => (
+      {shown.slice(0, 2).map((e, i) => (
         <SourceCard
           key={i}
           avatar={AV[e.source_type] ?? asset.avatarReddit}
