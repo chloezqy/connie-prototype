@@ -1,9 +1,11 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { FigmaFrame } from '@/layouts/FigmaFrame'
 import { CRLauncher } from '@/components/connie/CRLauncher'
 import { cn } from '@/lib/cn'
+import { callConnie } from '@/api/connieClient'
+import { isInlineAnnotations, type Evidence, type InlineAnnotation } from '@/types/connie-contract'
 
 /* ---------- Annotation asset paths (public/figma) ---------- */
 const asset = {
@@ -190,6 +192,41 @@ const crSeatQuote =
   '“Seat cushioning compressed quickly and offered little support during longer rides.”'
 const redditFussQuote = '"My daughter fusses to get out after one loop around the block.”'
 
+/* ---------- Live inline_annotations mapping ---------- */
+const AV: Record<string, string> = {
+  consumer_reports: asset.avatarCr,
+  reddit: asset.avatarReddit,
+  instagram: asset.avatarInstagram,
+  youtube: asset.avatarReddit,
+  web: asset.avatarInstagram,
+}
+const SOURCE_LABEL: Record<string, string> = {
+  consumer_reports: 'Consumer Reports',
+  reddit: 'Reddit',
+  instagram: 'Instagram',
+  youtube: 'YouTube',
+  web: 'Web',
+}
+
+/** Renders a live annotation's evidence as source cards (falls back to nothing if empty). */
+function LiveSources({ evidence }: { evidence: Evidence[] }) {
+  if (evidence.length === 0) return null
+  return (
+    <SourceRow>
+      {evidence.slice(0, 2).map((e, i) => (
+        <SourceCard
+          key={i}
+          avatar={AV[e.source_type] ?? asset.avatarReddit}
+          name={SOURCE_LABEL[e.source_type] ?? e.source_name}
+          quote={e.quote}
+          chip={e.source_name}
+          fixed={false}
+        />
+      ))}
+    </SourceRow>
+  )
+}
+
 /* ---------- Exported screen ---------- */
 export function AnnotationsScreen() {
   const [params, setParams] = useSearchParams()
@@ -204,6 +241,29 @@ export function AnnotationsScreen() {
     next.set('state', s)
     setParams(next, { replace: true })
   }
+
+  // Fetch live inline annotations once; index them by verdict so each callout can use its own.
+  const [annById, setAnnById] = useState<Record<string, InlineAnnotation>>({})
+  const didFetch = useRef(false)
+  useEffect(() => {
+    if (didFetch.current) return
+    didFetch.current = true
+    callConnie({ message: 'Verify the marketing claims on this UppaBaby Vista V2 product page.' })
+      .then((r) => {
+        if (isInlineAnnotations(r)) {
+          const map: Record<string, InlineAnnotation> = {}
+          for (const a of r.inline_annotations) map[a.verdict] = a
+          setAnnById(map)
+        }
+      })
+      .catch(() => {
+        /* keep baked callouts on error */
+      })
+  }, [])
+  const annBoth = annById['verified_by_both']
+  const annComm = annById['verified_by_community_only']
+  const annMis = annById['misleading']
+  const annUnv = annById['unverifiable']
 
   return (
     <FigmaFrame backdrop={asset.backdrop} backdropOpacity={state === 'base' ? 1 : 0.7}>
@@ -229,24 +289,28 @@ export function AnnotationsScreen() {
         <Callout
           style={{ left: 802, top: 598 }}
           icon={asset.check}
-          title="Verified claim"
-          subtitle="Matches what our testers and real users are saying. "
+          title={annBoth?.verdict_label ?? 'Verified claim'}
+          subtitle={annBoth?.explanation ?? 'Matches what our testers and real users are saying. '}
           onClose={() => setState('base')}
         >
-          <SourceRow>
-            <SourceCard
-              avatar={asset.avatarCr}
-              name="Consumer Reports "
-              quote={crPaddingQuote}
-              chip="Baby Trend Stroller Review"
-            />
-            <SourceCard
-              avatar={asset.avatarReddit}
-              name="Reddit"
-              quote={redditComfyQuote}
-              chip="Best Strollers: Thread"
-            />
-          </SourceRow>
+          {annBoth ? (
+            <LiveSources evidence={annBoth.evidence} />
+          ) : (
+            <SourceRow>
+              <SourceCard
+                avatar={asset.avatarCr}
+                name="Consumer Reports "
+                quote={crPaddingQuote}
+                chip="Baby Trend Stroller Review"
+              />
+              <SourceCard
+                avatar={asset.avatarReddit}
+                name="Reddit"
+                quote={redditComfyQuote}
+                chip="Best Strollers: Thread"
+              />
+            </SourceRow>
+          )}
         </Callout>
       )}
 
@@ -255,27 +319,34 @@ export function AnnotationsScreen() {
         <Callout
           style={{ left: 802, top: 598 }}
           icon={asset.check}
-          title="Verified claim"
-          subtitle="Our testers haven't reviewed this product, but it matches what real users are saying."
+          title={annComm?.verdict_label ?? 'Verified claim'}
+          subtitle={
+            annComm?.explanation ??
+            "Our testers haven't reviewed this product, but it matches what real users are saying."
+          }
           onClose={() => setState('base')}
         >
-          <SourceRow>
-            <SourceCard
-              avatar={asset.avatarReddit}
-              name="Reddit"
-              quote={redditComfyQuoteAlt}
-              chip="Best Strollers: Thread"
-              fixed={false}
-            />
-            <SourceCard
-              avatar={asset.avatarInstagram}
-              name="Instagram"
-              quote={instagramQuote}
-              chip="@dad_at_home’s post"
-              ring={false}
-              fixed={false}
-            />
-          </SourceRow>
+          {annComm ? (
+            <LiveSources evidence={annComm.evidence} />
+          ) : (
+            <SourceRow>
+              <SourceCard
+                avatar={asset.avatarReddit}
+                name="Reddit"
+                quote={redditComfyQuoteAlt}
+                chip="Best Strollers: Thread"
+                fixed={false}
+              />
+              <SourceCard
+                avatar={asset.avatarInstagram}
+                name="Instagram"
+                quote={instagramQuote}
+                chip="@dad_at_home’s post"
+                ring={false}
+                fixed={false}
+              />
+            </SourceRow>
+          )}
         </Callout>
       )}
 
@@ -284,24 +355,28 @@ export function AnnotationsScreen() {
         <Callout
           style={{ left: 802, top: 598 }}
           icon={asset.xcircle}
-          title="Misleading claim"
-          subtitle="Doesn't match what our testers and real users are saying."
+          title={annMis?.verdict_label ?? 'Misleading claim'}
+          subtitle={annMis?.explanation ?? "Doesn't match what our testers and real users are saying."}
           onClose={() => setState('base')}
         >
-          <SourceRow>
-            <SourceCard
-              avatar={asset.avatarCr}
-              name="Consumer Reports "
-              quote={crSeatQuote}
-              chip="Baby Trend Stroller Review"
-            />
-            <SourceCard
-              avatar={asset.avatarReddit}
-              name="Reddit"
-              quote={redditFussQuote}
-              chip="Best Strollers: Thread"
-            />
-          </SourceRow>
+          {annMis ? (
+            <LiveSources evidence={annMis.evidence} />
+          ) : (
+            <SourceRow>
+              <SourceCard
+                avatar={asset.avatarCr}
+                name="Consumer Reports "
+                quote={crSeatQuote}
+                chip="Baby Trend Stroller Review"
+              />
+              <SourceCard
+                avatar={asset.avatarReddit}
+                name="Reddit"
+                quote={redditFussQuote}
+                chip="Best Strollers: Thread"
+              />
+            </SourceRow>
+          )}
         </Callout>
       )}
 
@@ -310,8 +385,11 @@ export function AnnotationsScreen() {
         <Callout
           style={{ left: 741, top: 609 }}
           icon={asset.question}
-          title="Unable to verify claim"
-          subtitle="Connie didn’t have enough info to confirm or dispute this claim. Add more trusted sources to help verify it."
+          title={annUnv?.verdict_label ?? 'Unable to verify claim'}
+          subtitle={
+            annUnv?.explanation ??
+            'Connie didn’t have enough info to confirm or dispute this claim. Add more trusted sources to help verify it.'
+          }
           onClose={() => setState('base')}
         >
           <div className="flex w-full flex-col items-center gap-[12px] py-[8px]">
