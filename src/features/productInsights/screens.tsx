@@ -378,16 +378,22 @@ function BasedOnPopover({
   onClose,
   preferences,
   sources,
+  onMouseEnter,
+  onMouseLeave,
 }: {
   onClose: () => void
   preferences: string[]
   sources: string[]
+  onMouseEnter?: () => void
+  onMouseLeave?: () => void
 }) {
   // The pencils mean these are editable — toggle a source/preference right here.
   const toggleSource = usePreferences((s) => s.toggleSource)
   const togglePreference = usePreferences((s) => s.togglePreference)
   return (
     <div
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
       className="absolute z-20 flex flex-col gap-[8px] overflow-hidden rounded-[16px] border-[0.5px] border-border-subtle bg-bg-secondary pb-[16px] pl-[32px] pr-[40px] pt-[24px] shadow-[0px_0px_15px_0px_rgba(5,5,0,0.16)]"
       style={{ left: 731, top: 85, width: 520 }}
     >
@@ -493,6 +499,21 @@ function InsightPanel({
   const [tooltip, setTooltip] = useState(initialTooltip)
   const [saved, setSaved] = useState(false)
 
+  // The BASED ON popover is interactive (editable chips), so hovering off the ⓘ must not close it
+  // instantly — keep it open with a grace period, and while the cursor is over the popover itself.
+  const closeTimer = useRef<number | null>(null)
+  const openTip = () => {
+    if (closeTimer.current) {
+      clearTimeout(closeTimer.current)
+      closeTimer.current = null
+    }
+    setTooltip(true)
+  }
+  const closeTipSoon = () => {
+    if (closeTimer.current) clearTimeout(closeTimer.current)
+    closeTimer.current = window.setTimeout(() => setTooltip(false), 300)
+  }
+
   // Draggable panel position (Figma default 736 / 287).
   const [pos, setPos] = useState({ left: 736, top: 287 })
   const dragRef = useRef<{ x: number; y: number; left: number; top: number } | null>(null)
@@ -532,8 +553,9 @@ function InsightPanel({
               </div>
               <button
                 onPointerDown={(e) => e.stopPropagation()}
-                onMouseEnter={() => setTooltip(true)}
-                onMouseLeave={() => setTooltip(false)}
+                onMouseEnter={openTip}
+                onMouseLeave={closeTipSoon}
+                onClick={() => setTooltip((t) => !t)}
                 aria-label="Based on"
                 className="size-[24px]"
               >
@@ -633,7 +655,13 @@ function InsightPanel({
       </div>
 
       {tooltip && (
-        <BasedOnPopover onClose={() => setTooltip(false)} preferences={preferences} sources={sources} />
+        <BasedOnPopover
+          onClose={() => setTooltip(false)}
+          preferences={preferences}
+          sources={sources}
+          onMouseEnter={openTip}
+          onMouseLeave={closeTipSoon}
+        />
       )}
     </>
   )
