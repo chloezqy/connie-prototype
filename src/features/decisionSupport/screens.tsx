@@ -959,8 +959,8 @@ function DeepDiveRow({ row, first, last }: { row: DetailRow; first: boolean; las
 }
 
 function DetailedDeepDive({ onBack, product }: { onBack: () => void; product?: string | null }) {
-  // Fetch the full review (product_insights) for the reviewed product, once.
-  const [liveRows, setLiveRows] = useState<DetailRow[] | null>(null)
+  // Keep the raw payload so the rows re-derive when communities are connected/disconnected.
+  const [livePayload, setLivePayload] = useState<ProductInsightsPayload | null>(null)
   const [loading, setLoading] = useState(false)
   const connected = usePreferences((s) => s.sources)
   const didFetch = useRef(false)
@@ -971,7 +971,7 @@ function DetailedDeepDive({ onBack, product }: { onBack: () => void; product?: s
     callConnie({ message: `What are the key insights on the ${product}?` })
       .then((r) => {
         if (isProductInsights(r) && r.product_insights.insights.length > 0) {
-          setLiveRows(insightsToDetailRows(r.product_insights, connected))
+          setLivePayload(r.product_insights)
         }
       })
       .catch(() => {
@@ -979,6 +979,7 @@ function DetailedDeepDive({ onBack, product }: { onBack: () => void; product?: s
       })
       .finally(() => setLoading(false))
   }, [product])
+  const liveRows = livePayload ? insightsToDetailRows(livePayload, connected) : null
   const rows = liveRows ?? detailRows
 
   return (

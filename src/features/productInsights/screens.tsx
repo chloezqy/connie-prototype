@@ -793,7 +793,9 @@ export function ProductInsightsScreen() {
 
   // Fetch live product_insights on load. Until it returns (or if the backend is unreachable),
   // the baked rows show so the screen never breaks; live data swaps in when it arrives.
-  const [liveRows, setLiveRows] = useState<RowData[] | null>(null)
+  // Keep the raw payload, not the mapped rows — so connecting/disconnecting a community in
+  // onboarding re-derives the rows immediately (no stale community posts, no refetch needed).
+  const [livePayload, setLivePayload] = useState<ProductInsightsPayload | null>(null)
   const preferences = usePreferences((s) => s.preferences)
   const sources = usePreferences((s) => s.sources)
   const didFetch = useRef(false)
@@ -808,13 +810,14 @@ export function ProductInsightsScreen() {
     })
       .then((r) => {
         if (isProductInsights(r) && r.product_insights.insights.length > 0) {
-          setLiveRows(insightsToRows(r.product_insights, sources))
+          setLivePayload(r.product_insights)
         }
       })
       .catch(() => {
         /* keep baked rows on error */
       })
   }, [])
+  const liveRows = livePayload ? insightsToRows(livePayload, sources) : null
   const panelRows = liveRows && liveRows.length > 0 ? liveRows : rows
 
   const frame: ReactNode = (
