@@ -207,6 +207,50 @@ function LiveSources({ evidence }: { evidence: Evidence[] }) {
   )
 }
 
+/* ---------- Verifying loader (yellow-green "C + sparkles") ---------- */
+function Sparkle({ className, style }: { className?: string; style?: CSSProperties }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className={className} style={style}>
+      <path d="M12 2l1.7 6.1a3 3 0 0 0 2.2 2.2L22 12l-6.1 1.7a3 3 0 0 0-2.2 2.2L12 22l-1.7-6.1a3 3 0 0 0-2.2-2.2L2 12l6.1-1.7a3 3 0 0 0 2.2-2.2L12 2z" />
+    </svg>
+  )
+}
+
+/** Yellow-green "Connie is verifying" animation shown for ~5s before the callout appears. */
+function VerifyingCard({ style }: { style: CSSProperties }) {
+  return (
+    <div
+      className="absolute flex animate-pulse items-center gap-[14px] overflow-clip rounded-[16px] border-[0.5px] border-[#c5c5c5] bg-gradient-to-r from-[rgba(217,237,226,0.95)] to-[rgba(251,245,221,0.95)] px-[22px] py-[18px] shadow-panel"
+      style={{ width: 320, ...style }}
+    >
+      {/* "C" mark with twinkling sparkles */}
+      <div className="relative flex size-[40px] shrink-0 items-center justify-center rounded-[10px] bg-brand">
+        <span className="text-[22px] font-semibold leading-none text-white">C</span>
+        <Sparkle className="absolute -right-[7px] -top-[7px] size-[16px] animate-pulse text-[#bfd730]" />
+        <Sparkle
+          className="absolute -bottom-[5px] -left-[5px] size-[11px] animate-pulse text-[#ffd500]"
+          style={{ animationDelay: '0.4s' }}
+        />
+      </div>
+      <div className="flex min-w-0 flex-col gap-[3px]">
+        <div className="flex items-center gap-[8px]">
+          <p className="text-[15px] font-semibold text-fg-primary">Verifying claim</p>
+          <span className="flex gap-[3px]">
+            {[0, 1, 2].map((i) => (
+              <span
+                key={i}
+                className="size-[5px] animate-bounce rounded-full bg-fg-brand"
+                style={{ animationDelay: `${i * 0.15}s` }}
+              />
+            ))}
+          </span>
+        </div>
+        <p className="text-[12px] leading-[16px] text-fg-secondary">Checking CR tests &amp; community sources</p>
+      </div>
+    </div>
+  )
+}
+
 /* ---------- Exported screen ---------- */
 export function AnnotationsScreen() {
   const [params, setParams] = useSearchParams()
@@ -220,8 +264,20 @@ export function AnnotationsScreen() {
     setParams(next, { replace: true })
   }
 
-  // On the base screen, hovering the highlighted claim reveals the misleading-claim callout.
-  const [showMisleading, setShowMisleading] = useState(false)
+  // Hovering the highlighted claim runs a ~5s "verifying" animation, then reveals the callout.
+  // Moving off the claim cancels back to the base screen.
+  const [phase, setPhase] = useState<'idle' | 'loading' | 'result'>('idle')
+  const hoverTimer = useRef<number | null>(null)
+  useEffect(() => () => { if (hoverTimer.current) window.clearTimeout(hoverTimer.current) }, [])
+  const startVerify = () => {
+    setPhase('loading')
+    if (hoverTimer.current) window.clearTimeout(hoverTimer.current)
+    hoverTimer.current = window.setTimeout(() => setPhase('result'), 5000)
+  }
+  const cancelVerify = () => {
+    if (hoverTimer.current) window.clearTimeout(hoverTimer.current)
+    setPhase('idle')
+  }
 
   // Fetch live inline annotations once; index them by verdict so each callout can use its own.
   const [annById, setAnnById] = useState<Record<string, InlineAnnotation>>({})
@@ -303,14 +359,14 @@ export function AnnotationsScreen() {
   }
 
   return (
-    <FigmaFrame backdrop={asset.backdrop} backdropOpacity={showMisleading ? 0.7 : 1}>
-      {/* Highlighted claim on the page — hovering it reveals the misleading-claim callout;
-          moving off it returns to the base screen. No black border in either state. */}
+    <FigmaFrame backdrop={asset.backdrop} backdropOpacity={phase === 'idle' ? 1 : 0.7}>
+      {/* Highlighted claim on the page — hovering it runs the verify animation then reveals the
+          callout; moving off it returns to the base screen. No black border in either state. */}
       <div
         className="absolute cursor-pointer"
         style={{ left: 579, top: 563, width: 276, height: 34 }}
-        onMouseEnter={() => setShowMisleading(true)}
-        onMouseLeave={() => setShowMisleading(false)}
+        onMouseEnter={startVerify}
+        onMouseLeave={cancelVerify}
       >
         <div
           className="absolute rounded-[4px]"
@@ -318,14 +374,17 @@ export function AnnotationsScreen() {
         />
       </div>
 
+      {/* Verifying — yellow-green "C + sparkles" loader (~5s) before the result */}
+      {phase === 'loading' && <VerifyingCard style={{ left: 802, top: 598 }} />}
+
       {/* Misleading — CR + community (1052:2717) */}
-      {showMisleading && (
+      {phase === 'result' && (
         <Callout
           style={{ left: 802, top: 598 }}
           icon={asset.xcircle}
           title={annMis?.verdict_label ?? 'Misleading claim'}
           subtitle={annMis?.explanation ?? "Doesn't match what our testers and real users are saying."}
-          onClose={() => setShowMisleading(false)}
+          onClose={cancelVerify}
         >
           {annMis ? (
             <LiveSources evidence={annMis.evidence} />

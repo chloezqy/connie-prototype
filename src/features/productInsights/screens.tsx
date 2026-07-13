@@ -352,6 +352,9 @@ function BasedOnPopover({ onClose, preferences }: { onClose: () => void; prefere
 
 /* --------------------------------------------------- Insight panel (shared) */
 type Verdict = 'recommended' | 'notrec'
+/** Same fun fact on both the recommended and not-recommended cards. */
+const FUN_FACT =
+  "The first stroller, built in 1733, wasn't pushed at all — it was pulled by a goat or pony as a decorative novelty for wealthy families."
 const VERDICT_CFG: Record<
   Verdict,
   { icon: string; title: string; funFact: string; headsUp: { title: string; text: string } }
@@ -359,8 +362,7 @@ const VERDICT_CFG: Record<
   recommended: {
     icon: `${A}star.svg`,
     title: 'RECOMMENDED',
-    funFact:
-      'Oscar-winning actress Anne Hathaway has been spotted pushing this stroller through Central Park.',
+    funFact: FUN_FACT,
     headsUp: {
       title: 'Heads up on comfort',
       text: 'Great pick overall - just note a few users noted that the seat was less comfortable than expected.',
@@ -369,8 +371,7 @@ const VERDICT_CFG: Record<
   notrec: {
     icon: `${A}xcircle.svg`,
     title: 'NOT RECOMMENDED',
-    funFact:
-      'This model was quietly pulled from several retailers after a string of owner complaints about the frame.',
+    funFact: FUN_FACT,
     headsUp: {
       title: 'One thing in its favor',
       text: "It's among the cheapest options on the shelf - but our testers found the tradeoffs rarely worth it.",
@@ -452,20 +453,20 @@ function InsightPanel({
             <button
               onPointerDown={(e) => e.stopPropagation()}
               onClick={() => setSaved((s) => !s)}
-              className={`flex h-[40px] w-[104px] items-center justify-center gap-[8px] rounded-[24px] border bg-white ${
-                saved ? 'border-brand' : 'border-border-subtle'
+              className={`flex h-[40px] w-[104px] items-center justify-center gap-[8px] rounded-[24px] border ${
+                saved ? 'border-brand bg-brand' : 'border-border-subtle bg-white'
               }`}
             >
               <span
                 className={`text-[16px] font-semibold leading-[24px] tracking-[-0.25px] ${
-                  saved ? 'text-fg-brand' : 'text-fg-secondary'
+                  saved ? 'text-fg-inverse' : 'text-fg-secondary'
                 }`}
               >
                 {saved ? 'Saved' : 'Save'}
               </span>
               <IconHeart
                 size={16}
-                className={saved ? 'text-fg-brand' : 'text-fg-secondary'}
+                className={saved ? 'text-fg-inverse' : 'text-fg-secondary'}
                 style={saved ? { fill: 'currentColor' } : undefined}
               />
             </button>
@@ -505,9 +506,13 @@ function InsightPanel({
               </div>
             </div>
 
-            {/* heads up */}
+            {/* heads up — yellow on RECOMMENDED (nothing red on a recommended pick), red on NOT REC */}
             <div className="py-[8px]">
-              <div className="flex w-full items-start gap-[8px] bg-[rgba(255,240,244,0.7)] pb-[20px] pl-[16px] pr-[20px] pt-[16px]">
+              <div
+                className={`flex w-full items-start gap-[8px] pb-[20px] pl-[16px] pr-[20px] pt-[16px] ${
+                  verdict === 'recommended' ? 'bg-[rgba(255,247,214,0.8)]' : 'bg-[rgba(255,240,244,0.7)]'
+                }`}
+              >
                 <img src={`${A}warning.svg`} alt="" className="h-[23.625px] w-[20px] shrink-0" />
                 <div className="flex flex-1 flex-col gap-[4px]">
                   <p className="text-[16px] font-semibold leading-[24px] text-fg-primary">{cfg.headsUp.title}</p>
@@ -655,6 +660,34 @@ const notRecRows: RowData[] = [
   },
 ]
 
+/* ----------------------------------------------- "Generating insights" overlay */
+/** The product-image squares Connie's badges land on (frame coords). */
+const PRODUCT_SQUARES = [
+  { left: 30, top: 132, width: 352, height: 346 },
+  { left: 452, top: 132, width: 358, height: 346 },
+  { left: 885, top: 132, width: 348, height: 346 },
+]
+
+/** Yellow-green "AI is generating insights" shimmer over each product image, shown on load. */
+function GeneratingOverlay() {
+  return (
+    <>
+      {PRODUCT_SQUARES.map((s, i) => (
+        <div
+          key={i}
+          className="pointer-events-none absolute animate-pulse overflow-hidden rounded-[8px] bg-gradient-to-br from-[rgba(217,237,226,0.85)] to-[rgba(251,245,221,0.85)]"
+          style={{ left: s.left, top: s.top, width: s.width, height: s.height }}
+        >
+          <span className="absolute left-[12px] top-[12px] flex items-center gap-[6px] rounded-full bg-white/70 px-[10px] py-[4px] text-[12px] font-semibold text-[#282923]">
+            <img src={`${A}shootingstar.svg`} alt="" className="size-[14px]" />
+            Analyzing…
+          </span>
+        </div>
+      ))}
+    </>
+  )
+}
+
 /* -------------------------------------------------------- Product badges */
 function ProductBadges({ onOpen, onOpenNotRec }: { onOpen: () => void; onOpenNotRec: () => void }) {
   return (
@@ -731,7 +764,8 @@ function StateSwitcher({
 export function ProductInsightsScreen() {
   const [params, setParams] = useSearchParams()
   const navigate = useNavigate()
-  const variant = (params.get('v') as Variant) || 'recommended'
+  // Default to no card — the retail page with badges only. The card opens when a star is clicked.
+  const variant = (params.get('v') as Variant) || 'collapsed'
   const setVariant = (v: Variant) => setParams({ v }, { replace: true })
 
   const showRecommended = variant === 'recommended' || variant === 'expanded' || variant === 'tooltip'
@@ -761,6 +795,13 @@ export function ProductInsightsScreen() {
   }, [])
   const panelRows = liveRows ?? rows
 
+  // Show the "generating insights" shimmer over the products for ~5s before revealing the badges.
+  const [generating, setGenerating] = useState(true)
+  useEffect(() => {
+    const t = window.setTimeout(() => setGenerating(false), 5000)
+    return () => window.clearTimeout(t)
+  }, [])
+
   const frame: ReactNode = (
     <FigmaFrame>
       {/* Click anywhere on the retail page (behind the retail group / panels / launcher) to open
@@ -771,12 +812,17 @@ export function ProductInsightsScreen() {
         className="absolute inset-0 cursor-pointer"
       />
 
-      {/* Shared retail backdrop + product badges pinned to their products. */}
+      {/* Shared retail backdrop. While Connie "generates," a shimmer covers the products; the
+          chat + green-star badges appear once it finishes. */}
       <RetailBackdrop />
-      <ProductBadges
-        onOpen={() => setVariant('recommended')}
-        onOpenNotRec={() => setVariant('notrec')}
-      />
+      {generating ? (
+        <GeneratingOverlay />
+      ) : (
+        <ProductBadges
+          onOpen={() => setVariant('recommended')}
+          onOpenNotRec={() => setVariant('notrec')}
+        />
+      )}
 
       {showRecommended && (
         <InsightPanel

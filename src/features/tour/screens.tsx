@@ -244,7 +244,7 @@ export function TourScreen() {
               border: '2px solid #989991',
             }}
           />
-          <StarBadge withBorder={step === 0} />
+          <StarBadge withBorder={step === 1} />
         </>
       )}
 

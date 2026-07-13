@@ -73,6 +73,21 @@ function Bubble({ children }: { children: ReactNode }) {
   )
 }
 
+/** "Connie is thinking…" — animated three-dot bubble shown after a selection. */
+function ThinkingBubble() {
+  return (
+    <div className="flex shrink-0 items-center gap-[8px] rounded-bl-[12px] rounded-br-[12px] rounded-tr-[12px] bg-bg-tertiary px-[16px] py-[18px]">
+      {[0, 1, 2].map((i) => (
+        <span
+          key={i}
+          className="size-[8px] animate-bounce rounded-full bg-fg-secondary"
+          style={{ animationDelay: `${i * 0.15}s` }}
+        />
+      ))}
+    </div>
+  )
+}
+
 type CardTone = 'plain' | 'strong' | 'green'
 
 /** A single priority bento card. */
@@ -300,10 +315,13 @@ export function PriorityInferenceScreen() {
     setParams({ step: String(c) }, { replace: true })
   }
 
+  // After a selection, show a "thinking…" bubble for ~5s before revealing the next content.
+  const [thinking, setThinking] = useState(false)
+
   // Chat auto-scrolls to the newest content (matches each Figma scroll position).
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight
-  }, [step])
+  }, [step, thinking])
 
   const placeholder =
     step >= 7
@@ -321,13 +339,16 @@ export function PriorityInferenceScreen() {
   const [chosenCommute, setChosenCommute] = useState<string | null>(
     initial >= 7 ? 'Mostly public transit' : null,
   )
-  // After a selection, highlight the chip immediately, then reveal the next question / priority
-  // change after ~800ms — matching the post-purchase "after delay" interaction.
+  // On selection: highlight the chip immediately, show the thinking bubble, then reveal next.
   const timerRef = useRef<number | null>(null)
   useEffect(() => () => { if (timerRef.current) window.clearTimeout(timerRef.current) }, [])
   const answerAfter = (n: number) => {
+    setThinking(true)
     if (timerRef.current) window.clearTimeout(timerRef.current)
-    timerRef.current = window.setTimeout(() => go(n), 800)
+    timerRef.current = window.setTimeout(() => {
+      setThinking(false)
+      go(n)
+    }, 5000)
   }
   const answerLiving = (label: string) => {
     setChosenLiving(label)
@@ -485,6 +506,12 @@ export function PriorityInferenceScreen() {
                     </span>
                     <img src={asset.btnArrow} alt="" className="size-[16px]" />
                   </button>
+                </Group>
+              )}
+
+              {thinking && (
+                <Group>
+                  <ThinkingBubble />
                 </Group>
               )}
             </>
