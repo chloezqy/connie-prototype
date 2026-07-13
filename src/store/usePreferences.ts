@@ -7,11 +7,12 @@ import { create } from 'zustand'
  */
 const DEFAULT_PREFERENCES = ['Long-term reliability', 'Ease of use']
 /**
- * Communities connected during onboarding (N4a). Starts EMPTY — nothing is "connected" until the
- * shopper actually picks it, so no community source ever appears that they didn't choose.
+ * Communities connected during onboarding (N4a) — pre-selected to match the design, the same way
+ * the two default preferences are. Deselecting or adding any community in onboarding is respected
+ * everywhere (Sources popover, insight cards, annotations).
  * Consumer Reports is always implicit and shown separately.
  */
-const DEFAULT_SOURCES: string[] = []
+const DEFAULT_SOURCES = ['Instagram', 'Reddit']
 
 interface PreferencesState {
   preferences: string[]

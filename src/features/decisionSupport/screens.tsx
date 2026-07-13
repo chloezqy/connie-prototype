@@ -849,7 +849,11 @@ const DD_LABEL: Record<string, string> = {
 }
 const DD_COMMUNITY_AVATAR: Record<CommunitySource, string> = {
   Instagram: '/figma/comm-instagram.png',
-  Reddit: `${I}av5.png`,
+  Reddit: '/figma/comm-reddit.svg',
+  YouTube: '/figma/comm-youtube.svg',
+  Tiktok: '/figma/comm-tiktok.svg',
+  Pinterest: '/figma/comm-pinterest.svg',
+  'Online blogs': '/figma/comm-google.svg',
 }
 
 /** Same content as the Product Insights card: real CR/web evidence + connected community posts. */

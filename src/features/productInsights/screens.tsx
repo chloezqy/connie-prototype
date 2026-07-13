@@ -204,10 +204,14 @@ const SOURCE_AVATAR: Record<string, string> = {
   web: `${A}link.svg`,
 }
 
-/** Avatars for the illustrative community posts. */
+/** Avatars for the illustrative community posts — every community offered in onboarding. */
 const COMMUNITY_AVATAR: Record<CommunitySource, string> = {
-  Instagram: `${A}insta.png`,
-  Reddit: av5,
+  Instagram: '/figma/comm-instagram.png',
+  Reddit: '/figma/comm-reddit.svg',
+  YouTube: '/figma/comm-youtube.svg',
+  Tiktok: '/figma/comm-tiktok.svg',
+  Pinterest: '/figma/comm-pinterest.svg',
+  'Online blogs': '/figma/comm-google.svg',
 }
 
 /**
