@@ -16,10 +16,29 @@ import { NaviRail } from '@/components/connie/NaviRail'
 import { RetailBackdrop } from '@/components/connie/RetailBackdrop'
 import { IconHeart } from '@/components/icons'
 
-/** The product this "page" is about — drives the live product_insights request. */
-const LIVE_PRODUCT = 'UPPAbaby Vista V2'
-/** The one genuinely not-recommended stroller in the CR data — drives the NOT RECOMMENDED card. */
-const NOT_REC_PRODUCT = 'Lite 3'
+/* The three strollers below are the ones actually visible on the retail backdrop
+ * (`public/figma/insights-bg.png`, an Amazon search page). They must stay in sync with the
+ * CR dataset — see `backend-data/README.md`. If you change the roster, change it in three
+ * places: this file, the CR data file, and the roster count in the Langflow prompt. */
+
+/** Centre product (green badge, left: 796) — drives the live product_insights request. */
+const LIVE_PRODUCT = 'Baby Trend Passport Switch 6-in-1'
+
+/** The two not-recommended strollers, keyed by which grey badge opens them.
+ *  `pos` anchors each panel near its product card (panel is 540 wide in a 1440 frame, so the
+ *  right-hand one is clamped to stay on canvas). Both panels remain draggable. */
+const NOT_REC_PRODUCTS = {
+  left: {
+    name: 'Dream On Me Aero Travel Umbrella Stroller',
+    pos: { left: 176, top: 170 },
+  },
+  right: {
+    name: 'Graco Ready2Grow 2.0 Double Stroller',
+    pos: { left: 880, top: 170 },
+  },
+} as const
+
+type NotRecSlot = keyof typeof NOT_REC_PRODUCTS
 
 /* ------------------------------------------------------------------ *
  * Product Insights — faithful reproduction of Figma frames
@@ -782,30 +801,39 @@ const notRecRows: RowData[] = [
 ]
 
 /* -------------------------------------------------------- Product badges */
-function ProductBadges({ onOpen, onOpenNotRec }: { onOpen: () => void; onOpenNotRec: () => void }) {
+function ProductBadges({
+  onOpen,
+  onOpenNotRec,
+}: {
+  onOpen: () => void
+  onOpenNotRec: (slot: NotRecSlot) => void
+}) {
   return (
     <>
+      {/* Centre card — Baby Trend Passport Switch 6-in-1 (recommended). */}
       <button
         onClick={onOpen}
         className="pointer-events-auto absolute flex items-center justify-center rounded-full bg-rating-excellent"
         style={{ left: 796, top: 101, width: 45, height: 45 }}
-        aria-label="Open Connie insights"
+        aria-label={`Open Connie insights for the ${LIVE_PRODUCT}`}
       >
         <img src={`${A}chatblob.png`} alt="" className="size-[28px] object-contain" />
       </button>
+      {/* Right card — Graco Ready2Grow 2.0 (not recommended). */}
       <button
-        onClick={onOpenNotRec}
+        onClick={() => onOpenNotRec('right')}
         className="pointer-events-auto absolute flex items-center justify-center rounded-full bg-[#9d9d9d]"
         style={{ left: 1215, top: 101, width: 45, height: 45 }}
-        aria-label="See why this isn't recommended"
+        aria-label={`See why the ${NOT_REC_PRODUCTS.right.name} isn't recommended`}
       >
         <img src={`${A}chatcircle.svg`} alt="" className="size-[28px]" />
       </button>
+      {/* Left card — Dream On Me Aero (not recommended). */}
       <button
-        onClick={onOpenNotRec}
+        onClick={() => onOpenNotRec('left')}
         className="pointer-events-auto absolute flex items-center justify-center rounded-full bg-[#9d9d9d]"
         style={{ left: 356, top: 100, width: 45, height: 45 }}
-        aria-label="See why this isn't recommended"
+        aria-label={`See why the ${NOT_REC_PRODUCTS.left.name} isn't recommended`}
       >
         <img src={`${A}chatcircle.svg`} alt="" className="size-[28px]" />
       </button>
@@ -859,6 +887,9 @@ export function ProductInsightsScreen() {
   const navigate = useNavigate()
   const variant = (params.get('v') as Variant) || 'recommended'
   const setVariant = (v: Variant) => setParams({ v }, { replace: true })
+  /** Which grey badge opened the NOT RECOMMENDED panel — the two open different products. */
+  const notRecSlot: NotRecSlot = params.get('p') === 'right' ? 'right' : 'left'
+  const openNotRec = (slot: NotRecSlot) => setParams({ v: 'notrec', p: slot }, { replace: true })
 
   const showRecommended = variant === 'recommended' || variant === 'expanded' || variant === 'tooltip'
 
@@ -884,36 +915,54 @@ export function ProductInsightsScreen() {
       .then((r) => {
         if (isProductInsights(r) && r.product_insights.insights.length > 0) {
           setLivePayload(r.product_insights)
+        } else {
+          console.warn('[Connie] Product Insights fell back to mock rows: backend returned', r)
         }
       })
-      .catch(() => {
-        /* keep baked rows on error */
+      .catch((err) => {
+        console.warn('[Connie] Product Insights fetch failed, showing mock:', err)
       })
   }, [priorityKey])
   const liveRows = livePayload ? insightsToRows(livePayload, sources) : null
   const panelRows = liveRows && liveRows.length > 0 ? liveRows : rows
 
-  // NOT RECOMMENDED card — live insights for the one genuinely not-recommended stroller in the CR
-  // data. Fetched lazily (only when that panel is opened) so we don't spend quota on every load.
-  const [notRecPayload, setNotRecPayload] = useState<ProductInsightsPayload | null>(null)
-  const notRecFetched = useRef<string | null>(null)
+  // NOT RECOMMENDED cards — live insights for the two not-recommended strollers on the page.
+  // Fetched lazily (only when a panel is opened) and cached per slot, so we don't spend Vertex
+  // quota on page load and don't refetch when the user reopens the same card.
+  const [notRecPayloads, setNotRecPayloads] = useState<
+    Partial<Record<NotRecSlot, ProductInsightsPayload>>
+  >({})
+  // Keyed on `slot|priorities`: StrictMode's double-invoke is skipped, but switching badges or
+  // editing preferences in the BASED ON popover triggers a fresh, correctly-ordered fetch.
+  const notRecFetched = useRef<Set<string>>(new Set())
   useEffect(() => {
     if (variant !== 'notrec') return
-    if (notRecFetched.current === priorityKey) return
-    notRecFetched.current = priorityKey
+    const key = `${notRecSlot}|${priorityKey}`
+    if (notRecFetched.current.has(key)) return
+    notRecFetched.current.add(key)
     callConnie({
-      message: `What are the key insights on the ${NOT_REC_PRODUCT}?`,
+      message: `What are the key insights on the ${NOT_REC_PRODUCTS[notRecSlot].name}?`,
       priorities: priorityKey || undefined,
     })
       .then((r) => {
         if (isProductInsights(r) && r.product_insights.insights.length > 0) {
-          setNotRecPayload(r.product_insights)
+          setNotRecPayloads((prev) => ({ ...prev, [notRecSlot]: r.product_insights }))
+        } else {
+          // Wrong response_type, or zero insights — the panel will silently show baked rows,
+          // which look plausible enough to be mistaken for live data. Say so.
+          console.warn(
+            `[Connie] NOT RECOMMENDED (${notRecSlot}) fell back to mock rows: backend returned`,
+            r,
+          )
         }
       })
-      .catch(() => {
-        /* keep baked not-rec rows on error */
+      .catch((err) => {
+        // Keep baked rows, but never fail silently — a 429 from the Vertex quota looks exactly
+        // like "the mock was always there" otherwise.
+        console.warn(`[Connie] NOT RECOMMENDED (${notRecSlot}) fetch failed, showing mock:`, err)
       })
-  }, [variant, priorityKey])
+  }, [variant, notRecSlot, priorityKey])
+  const notRecPayload = notRecPayloads[notRecSlot] ?? null
   const notRecLive = notRecPayload ? insightsToRows(notRecPayload, sources) : null
   const notRecPanelRows = notRecLive && notRecLive.length > 0 ? notRecLive : notRecRows
 
@@ -929,10 +978,7 @@ export function ProductInsightsScreen() {
 
       {/* Shared retail backdrop + product badges pinned to their products. */}
       <RetailBackdrop />
-      <ProductBadges
-        onOpen={() => setVariant('recommended')}
-        onOpenNotRec={() => setVariant('notrec')}
-      />
+      <ProductBadges onOpen={() => setVariant('recommended')} onOpenNotRec={openNotRec} />
 
       {showRecommended && (
         <InsightPanel
@@ -949,7 +995,9 @@ export function ProductInsightsScreen() {
 
       {variant === 'notrec' && (
         <InsightPanel
-          key={`notrec-${priorityKey}`}
+          // Remount when the badge or the priorities change, so the panel re-anchors to the
+          // product it's describing instead of keeping the previous card's drag position.
+          key={`notrec-${notRecSlot}-${priorityKey}`}
           verdict="notrec"
           initialExpanded={null}
           initialTooltip={false}
@@ -957,8 +1005,8 @@ export function ProductInsightsScreen() {
           rows={notRecPanelRows}
           preferences={preferences}
           sources={sources}
-          // Anchor to the left grey product card (its badge sits at left 356 / top 100).
-          initialPos={{ left: 176, top: 170 }}
+          // Anchor under the grey card whose badge was clicked. Still draggable.
+          initialPos={NOT_REC_PRODUCTS[notRecSlot].pos}
         />
       )}
 

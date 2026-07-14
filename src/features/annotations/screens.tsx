@@ -253,7 +253,12 @@ export function AnnotationsScreen() {
   useEffect(() => {
     if (didFetch.current) return
     didFetch.current = true
-    callConnie({ message: 'Verify the marketing claims on this UppaBaby Vista V2 product page.' })
+    // Product must exist in the CR dataset (v5 roster — see `backend-data/README.md`), otherwise
+    // the agent has nothing to reconcile the page's claims against.
+    callConnie({
+      message:
+        'Verify the marketing claims on this Baby Trend Passport Switch 6-in-1 product page.',
+    })
       .then((r) => {
         if (isInlineAnnotations(r)) {
           const map: Record<string, InlineAnnotation> = {}

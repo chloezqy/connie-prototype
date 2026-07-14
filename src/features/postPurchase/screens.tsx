@@ -7,7 +7,10 @@ import { isPostPurchase, type CommunityStat } from '@/types/connie-contract'
 import { NaviRail } from '@/components/connie/NaviRail'
 
 /** The product this check-in is about (matches the saved ProductCard). */
-const LIVE_PRODUCT = 'UppaBaby Vista V2'
+// Must be a product that exists in the CR dataset — see `backend-data/README.md`. The v5 roster
+// is Baby Trend Passport Switch 6-in-1 / Dream On Me Aero / Graco Ready2Grow 2.0. Asking about a
+// stroller that isn't in Chroma returns a `chat` response instead of `post_purchase`.
+const LIVE_PRODUCT = 'Baby Trend Passport Switch 6-in-1'
 
 /* ---------- Post-Purchase asset paths (public/figma, prefix pp-) ---------- */
 const asset = {
