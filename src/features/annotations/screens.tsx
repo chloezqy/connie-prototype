@@ -217,6 +217,50 @@ function LiveSources({ evidence }: { evidence: Evidence[] }) {
   )
 }
 
+/* ---------- Verifying loader (yellow-green "C + sparkles") ---------- */
+function Sparkle({ className, style }: { className?: string; style?: CSSProperties }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className={className} style={style}>
+      <path d="M12 2l1.7 6.1a3 3 0 0 0 2.2 2.2L22 12l-6.1 1.7a3 3 0 0 0-2.2 2.2L12 22l-1.7-6.1a3 3 0 0 0-2.2-2.2L2 12l6.1-1.7a3 3 0 0 0 2.2-2.2L12 2z" />
+    </svg>
+  )
+}
+
+/** Yellow-green "Connie is verifying" animation shown for ~5s before the callout appears. */
+function VerifyingCard({ style }: { style: CSSProperties }) {
+  return (
+    <div
+      className="absolute flex animate-pulse items-center gap-[14px] overflow-clip rounded-[16px] border-[0.5px] border-[#c5c5c5] bg-gradient-to-r from-[rgba(217,237,226,0.95)] to-[rgba(251,245,221,0.95)] px-[22px] py-[18px] shadow-panel"
+      style={{ width: 320, ...style }}
+    >
+      {/* "C" mark with twinkling sparkles */}
+      <div className="relative flex size-[40px] shrink-0 items-center justify-center rounded-[10px] bg-brand">
+        <span className="text-[22px] font-semibold leading-none text-white">C</span>
+        <Sparkle className="absolute -right-[7px] -top-[7px] size-[16px] animate-pulse text-[#bfd730]" />
+        <Sparkle
+          className="absolute -bottom-[5px] -left-[5px] size-[11px] animate-pulse text-[#ffd500]"
+          style={{ animationDelay: '0.4s' }}
+        />
+      </div>
+      <div className="flex min-w-0 flex-col gap-[3px]">
+        <div className="flex items-center gap-[8px]">
+          <p className="text-[15px] font-semibold text-fg-primary">Verifying claim</p>
+          <span className="flex gap-[3px]">
+            {[0, 1, 2].map((i) => (
+              <span
+                key={i}
+                className="size-[5px] animate-bounce rounded-full bg-fg-brand"
+                style={{ animationDelay: `${i * 0.15}s` }}
+              />
+            ))}
+          </span>
+        </div>
+        <p className="text-[12px] leading-[16px] text-fg-secondary">Checking CR tests &amp; community sources</p>
+      </div>
+    </div>
+  )
+}
+
 /* ---------- Exported screen ---------- */
 export function AnnotationsScreen() {
   const [params, setParams] = useSearchParams()
@@ -230,21 +274,55 @@ export function AnnotationsScreen() {
     setParams(next, { replace: true })
   }
 
-  // On the base screen, hovering the highlighted claim reveals the misleading-claim callout.
-  // The callout has clickable source links, so don't close it the instant the cursor leaves the
-  // highlight — keep it open with a grace period, and while the cursor is over the callout itself.
-  const [showMisleading, setShowMisleading] = useState(false)
-  const closeTimer = useRef<number | null>(null)
-  const openCallout = () => {
+  // Hovering the highlighted claim runs a ~5s "verifying" animation, then reveals the callout.
+  //
+  // MERGE NOTE: Chloe's verify animation dismissed the callout the instant the cursor left the
+  // claim. But the callout contains clickable source links, so the cursor has to travel onto it —
+  // which cancelled it before it could be reached. Both behaviours are kept here: her phase
+  // machine drives the animation, and a 300ms grace period (plus hovering the callout itself,
+  // plus click-to-pin) keeps it reachable.
+  const [phase, setPhase] = useState<'idle' | 'loading' | 'result'>('idle')
+  const [pinned, setPinned] = useState(false)
+  const hoverTimer = useRef<number | null>(null) // loading → result
+  const closeTimer = useRef<number | null>(null) // grace period before dismissing
+  useEffect(
+    () => () => {
+      if (hoverTimer.current) window.clearTimeout(hoverTimer.current)
+      if (closeTimer.current) window.clearTimeout(closeTimer.current)
+    },
+    [],
+  )
+  /** Cancel a pending dismissal — the cursor came back (onto the claim or the callout). */
+  const keepOpen = () => {
     if (closeTimer.current) {
-      clearTimeout(closeTimer.current)
+      window.clearTimeout(closeTimer.current)
       closeTimer.current = null
     }
-    setShowMisleading(true)
   }
-  const closeCalloutSoon = () => {
-    if (closeTimer.current) clearTimeout(closeTimer.current)
-    closeTimer.current = window.setTimeout(() => setShowMisleading(false), 300)
+  const startVerify = () => {
+    keepOpen()
+    if (phase === 'result') return // already resolved — don't replay the animation
+    if (hoverTimer.current) window.clearTimeout(hoverTimer.current)
+    setPhase('loading')
+    hoverTimer.current = window.setTimeout(() => setPhase('result'), 5000)
+  }
+  /** Cursor left; dismiss after a grace period unless it comes back or the callout is pinned. */
+  const cancelVerifySoon = () => {
+    if (pinned) return
+    if (closeTimer.current) window.clearTimeout(closeTimer.current)
+    closeTimer.current = window.setTimeout(() => {
+      if (hoverTimer.current) window.clearTimeout(hoverTimer.current)
+      hoverTimer.current = null
+      setPhase('idle')
+    }, 300)
+  }
+  /** Explicit dismissal (the X) — drop the pin and reset immediately. */
+  const dismissVerify = () => {
+    keepOpen()
+    if (hoverTimer.current) window.clearTimeout(hoverTimer.current)
+    hoverTimer.current = null
+    setPinned(false)
+    setPhase('idle')
   }
 
   // Fetch live inline annotations once; index them by verdict so each callout can use its own.
@@ -336,15 +414,16 @@ export function AnnotationsScreen() {
   }
 
   return (
-    <FigmaFrame backdrop={asset.backdrop} backdropOpacity={showMisleading ? 0.7 : 1}>
-      {/* Highlighted claim on the page — hovering it reveals the misleading-claim callout;
-          moving off it returns to the base screen. No black border in either state. */}
+    <FigmaFrame backdrop={asset.backdrop} backdropOpacity={phase === 'idle' ? 1 : 0.7}>
+      {/* Highlighted claim on the page — hovering it runs the verify animation then reveals the
+          callout; moving off it returns to the base screen. No black border in either state. */}
       <div
         className="absolute cursor-pointer"
         style={{ left: 579, top: 563, width: 276, height: 34 }}
-        onMouseEnter={openCallout}
-        onMouseLeave={closeCalloutSoon}
-        onClick={() => setShowMisleading((s) => !s)}
+        onMouseEnter={startVerify}
+        onMouseLeave={cancelVerifySoon}
+        // Click to pin the callout open, so the source links stay reachable without hovering.
+        onClick={() => setPinned((p) => !p)}
       >
         <div
           className="absolute rounded-[4px]"
@@ -352,16 +431,19 @@ export function AnnotationsScreen() {
         />
       </div>
 
+      {/* Verifying — yellow-green "C + sparkles" loader (~5s) before the result */}
+      {phase === 'loading' && <VerifyingCard style={{ left: 802, top: 598 }} />}
+
       {/* Misleading — CR + community (1052:2717) */}
-      {showMisleading && (
+      {phase === 'result' && (
         <Callout
           style={{ left: 802, top: 598 }}
           icon={asset.xcircle}
           title={annMis?.verdict_label ?? 'Misleading claim'}
           subtitle={annMis?.explanation ?? "Doesn't match what our testers and real users are saying."}
-          onClose={() => setShowMisleading(false)}
-          onMouseEnter={openCallout}
-          onMouseLeave={closeCalloutSoon}
+          onClose={dismissVerify}
+          onMouseEnter={keepOpen}
+          onMouseLeave={cancelVerifySoon}
         >
           {annMis ? (
             <LiveSources evidence={annMis.evidence} />

@@ -466,8 +466,54 @@ function BasedOnPopover({
   )
 }
 
+/* ------------------------------------------- Insight rows shimmer (in-panel) */
+/** Placeholder rows shown while a panel's insights are still being generated.
+ *  Same yellow-green gradient as GeneratingOverlay / VerifyingCard so it reads as one animation.
+ *  This exists so a panel NEVER shows fabricated mock rows while live data is still in flight —
+ *  the mock is only a failure fallback, not a loading state. */
+function InsightRowsShimmer({ count = 4 }: { count?: number }) {
+  return (
+    <div className="flex w-full flex-col" aria-busy="true" aria-label="Generating insights">
+      <div className="flex items-center gap-[8px] pb-[12px]">
+        <img src={`${A}shootingstar.svg`} alt="" className="size-[16px]" />
+        <span className="text-[13px] font-semibold leading-[18px] text-fg-secondary">
+          Analyzing this stroller…
+        </span>
+      </div>
+      {Array.from({ length: count }).map((_, i) => (
+        <div
+          key={i}
+          className="flex items-start gap-[12px] border-b border-border-subtle py-[18px] last:border-b-0"
+        >
+          <div
+            className="size-[36px] shrink-0 animate-pulse rounded-[8px] bg-gradient-to-br from-[rgba(217,237,226,0.9)] to-[rgba(251,245,221,0.9)]"
+            style={{ animationDelay: `${i * 0.12}s` }}
+          />
+          <div className="flex min-w-0 flex-1 flex-col gap-[8px]">
+            <div
+              className="h-[16px] w-[45%] animate-pulse rounded-[4px] bg-gradient-to-r from-[rgba(217,237,226,0.9)] to-[rgba(251,245,221,0.9)]"
+              style={{ animationDelay: `${i * 0.12}s` }}
+            />
+            <div
+              className="h-[12px] w-full animate-pulse rounded-[4px] bg-gradient-to-r from-[rgba(217,237,226,0.7)] to-[rgba(251,245,221,0.7)]"
+              style={{ animationDelay: `${i * 0.12 + 0.06}s` }}
+            />
+            <div
+              className="h-[12px] w-[70%] animate-pulse rounded-[4px] bg-gradient-to-r from-[rgba(217,237,226,0.7)] to-[rgba(251,245,221,0.7)]"
+              style={{ animationDelay: `${i * 0.12 + 0.12}s` }}
+            />
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 /* --------------------------------------------------- Insight panel (shared) */
 type Verdict = 'recommended' | 'notrec'
+/** Same fun fact on both the recommended and not-recommended cards. */
+const FUN_FACT =
+  "The first stroller, built in 1733, wasn't pushed at all — it was pulled by a goat or pony as a decorative novelty for wealthy families."
 const VERDICT_CFG: Record<
   Verdict,
   { icon: string; title: string; funFact: string; headsUp: { title: string; text: string } }
@@ -475,8 +521,7 @@ const VERDICT_CFG: Record<
   recommended: {
     icon: `${A}star.svg`,
     title: 'RECOMMENDED',
-    funFact:
-      'Oscar-winning actress Anne Hathaway has been spotted pushing this stroller through Central Park.',
+    funFact: FUN_FACT,
     headsUp: {
       title: 'Heads up on comfort',
       text: 'Great pick overall - just note a few users noted that the seat was less comfortable than expected.',
@@ -485,8 +530,7 @@ const VERDICT_CFG: Record<
   notrec: {
     icon: `${A}xcircle.svg`,
     title: 'NOT RECOMMENDED',
-    funFact:
-      'This model was quietly pulled from several retailers after a string of owner complaints about the frame.',
+    funFact: FUN_FACT,
     headsUp: {
       title: 'One thing in its favor',
       text: "It's among the cheapest options on the shelf - but our testers found the tradeoffs rarely worth it.",
@@ -507,6 +551,7 @@ function InsightPanel({
   preferences,
   sources,
   initialPos,
+  loading = false,
 }: {
   verdict: Verdict
   initialExpanded: number | null
@@ -517,6 +562,8 @@ function InsightPanel({
   sources: string[]
   /** Where the panel first appears — lets NOT RECOMMENDED anchor to its own product card. */
   initialPos?: { left: number; top: number }
+  /** Live insights still in flight — show the shimmer instead of falling back to mock rows. */
+  loading?: boolean
 }) {
   const cfg = VERDICT_CFG[verdict]
   const [openRow, setOpenRow] = useState<number | null>(initialExpanded)
@@ -589,20 +636,20 @@ function InsightPanel({
             <button
               onPointerDown={(e) => e.stopPropagation()}
               onClick={() => setSaved((s) => !s)}
-              className={`flex h-[40px] w-[104px] items-center justify-center gap-[8px] rounded-[24px] border bg-white ${
-                saved ? 'border-brand' : 'border-border-subtle'
+              className={`flex h-[40px] w-[104px] items-center justify-center gap-[8px] rounded-[24px] border ${
+                saved ? 'border-brand bg-brand' : 'border-border-subtle bg-white'
               }`}
             >
               <span
                 className={`text-[16px] font-semibold leading-[24px] tracking-[-0.25px] ${
-                  saved ? 'text-fg-brand' : 'text-fg-secondary'
+                  saved ? 'text-fg-inverse' : 'text-fg-secondary'
                 }`}
               >
                 {saved ? 'Saved' : 'Save'}
               </span>
               <IconHeart
                 size={16}
-                className={saved ? 'text-fg-brand' : 'text-fg-secondary'}
+                className={saved ? 'text-fg-inverse' : 'text-fg-secondary'}
                 style={saved ? { fill: 'currentColor' } : undefined}
               />
             </button>
@@ -627,24 +674,32 @@ function InsightPanel({
                 />
               </div>
 
-              {/* rows */}
-              <div className="flex w-full flex-col">
-                {rows.map((row, i) => (
-                  <InsightRow
-                    key={row.title}
-                    row={row}
-                    first={i === 0}
-                    last={i === rows.length - 1}
-                    open={openRow === i}
-                    onToggle={() => setOpenRow((cur) => (cur === i ? null : i))}
-                  />
-                ))}
-              </div>
+              {/* rows — shimmer while live insights are generating, never mock-then-swap */}
+              {loading ? (
+                <InsightRowsShimmer />
+              ) : (
+                <div className="flex w-full flex-col">
+                  {rows.map((row, i) => (
+                    <InsightRow
+                      key={row.title}
+                      row={row}
+                      first={i === 0}
+                      last={i === rows.length - 1}
+                      open={openRow === i}
+                      onToggle={() => setOpenRow((cur) => (cur === i ? null : i))}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
 
-            {/* heads up */}
+            {/* heads up — yellow on RECOMMENDED (nothing red on a recommended pick), red on NOT REC */}
             <div className="py-[8px]">
-              <div className="flex w-full items-start gap-[8px] bg-[rgba(255,240,244,0.7)] pb-[20px] pl-[16px] pr-[20px] pt-[16px]">
+              <div
+                className={`flex w-full items-start gap-[8px] pb-[20px] pl-[16px] pr-[20px] pt-[16px] ${
+                  verdict === 'recommended' ? 'bg-[rgba(255,247,214,0.8)]' : 'bg-[rgba(255,240,244,0.7)]'
+                }`}
+              >
                 <img src={`${A}warning.svg`} alt="" className="h-[23.625px] w-[20px] shrink-0" />
                 <div className="flex flex-1 flex-col gap-[4px]">
                   <p className="text-[16px] font-semibold leading-[24px] text-fg-primary">{cfg.headsUp.title}</p>
@@ -800,6 +855,34 @@ const notRecRows: RowData[] = [
   },
 ]
 
+/* ----------------------------------------------- "Generating insights" overlay */
+/** The product-image squares Connie's badges land on (frame coords). */
+const PRODUCT_SQUARES = [
+  { left: 30, top: 132, width: 352, height: 346 },
+  { left: 452, top: 132, width: 358, height: 346 },
+  { left: 885, top: 132, width: 348, height: 346 },
+]
+
+/** Yellow-green "AI is generating insights" shimmer over each product image, shown on load. */
+function GeneratingOverlay() {
+  return (
+    <>
+      {PRODUCT_SQUARES.map((s, i) => (
+        <div
+          key={i}
+          className="pointer-events-none absolute animate-pulse overflow-hidden rounded-[8px] bg-gradient-to-br from-[rgba(217,237,226,0.85)] to-[rgba(251,245,221,0.85)]"
+          style={{ left: s.left, top: s.top, width: s.width, height: s.height }}
+        >
+          <span className="absolute left-[12px] top-[12px] flex items-center gap-[6px] rounded-full bg-white/70 px-[10px] py-[4px] text-[12px] font-semibold text-[#282923]">
+            <img src={`${A}shootingstar.svg`} alt="" className="size-[14px]" />
+            Analyzing…
+          </span>
+        </div>
+      ))}
+    </>
+  )
+}
+
 /* -------------------------------------------------------- Product badges */
 function ProductBadges({
   onOpen,
@@ -885,7 +968,8 @@ function StateSwitcher({
 export function ProductInsightsScreen() {
   const [params, setParams] = useSearchParams()
   const navigate = useNavigate()
-  const variant = (params.get('v') as Variant) || 'recommended'
+  // Default to no card — the retail page with badges only. The card opens when a star is clicked.
+  const variant = (params.get('v') as Variant) || 'collapsed'
   const setVariant = (v: Variant) => setParams({ v }, { replace: true })
   /** Which grey badge opened the NOT RECOMMENDED panel — the two open different products. */
   const notRecSlot: NotRecSlot = params.get('p') === 'right' ? 'right' : 'left'
@@ -922,6 +1006,8 @@ export function ProductInsightsScreen() {
       .catch((err) => {
         console.warn('[Connie] Product Insights fetch failed, showing mock:', err)
       })
+      // Settled either way — the shimmer's job is to cover the wait, not to hide a failure.
+      .finally(() => setInsightsSettled(true))
   }, [priorityKey])
   const liveRows = livePayload ? insightsToRows(livePayload, sources) : null
   const panelRows = liveRows && liveRows.length > 0 ? liveRows : rows
@@ -935,11 +1021,15 @@ export function ProductInsightsScreen() {
   // Keyed on `slot|priorities`: StrictMode's double-invoke is skipped, but switching badges or
   // editing preferences in the BASED ON popover triggers a fresh, correctly-ordered fetch.
   const notRecFetched = useRef<Set<string>>(new Set())
+  // Has this slot's fetch finished (either way)? Drives the in-panel shimmer, so a NOT RECOMMENDED
+  // card never shows mock rows while its real insights are still being generated.
+  const [notRecSettled, setNotRecSettled] = useState<Partial<Record<NotRecSlot, boolean>>>({})
   useEffect(() => {
     if (variant !== 'notrec') return
     const key = `${notRecSlot}|${priorityKey}`
     if (notRecFetched.current.has(key)) return
     notRecFetched.current.add(key)
+    setNotRecSettled((prev) => ({ ...prev, [notRecSlot]: false }))
     callConnie({
       message: `What are the key insights on the ${NOT_REC_PRODUCTS[notRecSlot].name}?`,
       priorities: priorityKey || undefined,
@@ -961,10 +1051,35 @@ export function ProductInsightsScreen() {
         // like "the mock was always there" otherwise.
         console.warn(`[Connie] NOT RECOMMENDED (${notRecSlot}) fetch failed, showing mock:`, err)
       })
+      // Settled either way: live data replaces the shimmer, a failure falls back to mock rows.
+      .finally(() => setNotRecSettled((prev) => ({ ...prev, [notRecSlot]: true })))
   }, [variant, notRecSlot, priorityKey])
   const notRecPayload = notRecPayloads[notRecSlot] ?? null
   const notRecLive = notRecPayload ? insightsToRows(notRecPayload, sources) : null
   const notRecPanelRows = notRecLive && notRecLive.length > 0 ? notRecLive : notRecRows
+  /** Shimmer until this badge's fetch settles. Reopening an already-fetched card is instant. */
+  const notRecLoading = notRecSettled[notRecSlot] !== true
+
+  // "Generating insights" shimmer over the product images, before the badges appear.
+  //
+  // Chloe's version was a blind `setTimeout(…, 5000)` — it cleared after 5s whether or not the
+  // backend had answered, so a slow call (or a Vertex 429) would reveal the badges and then serve
+  // mock rows behind an animation that claimed we'd analysed the page. Now it holds until the real
+  // fetch settles, with her 5s as a FLOOR so it never flashes, and a 20s ceiling so a hung backend
+  // can't trap the user behind a permanent shimmer.
+  const MIN_SHIMMER_MS = 5000
+  const MAX_SHIMMER_MS = 20000
+  const [minShimmerDone, setMinShimmerDone] = useState(false)
+  const [insightsSettled, setInsightsSettled] = useState(false)
+  useEffect(() => {
+    const min = window.setTimeout(() => setMinShimmerDone(true), MIN_SHIMMER_MS)
+    const max = window.setTimeout(() => setInsightsSettled(true), MAX_SHIMMER_MS)
+    return () => {
+      window.clearTimeout(min)
+      window.clearTimeout(max)
+    }
+  }, [])
+  const generating = !minShimmerDone || !insightsSettled
 
   const frame: ReactNode = (
     <FigmaFrame>
@@ -976,9 +1091,14 @@ export function ProductInsightsScreen() {
         className="absolute inset-0 cursor-pointer"
       />
 
-      {/* Shared retail backdrop + product badges pinned to their products. */}
+      {/* Shared retail backdrop. While Connie "generates," a shimmer covers the products; the
+          chat + green-star badges appear once it finishes. */}
       <RetailBackdrop />
-      <ProductBadges onOpen={() => setVariant('recommended')} onOpenNotRec={openNotRec} />
+      {generating ? (
+        <GeneratingOverlay />
+      ) : (
+        <ProductBadges onOpen={() => setVariant('recommended')} onOpenNotRec={openNotRec} />
+      )}
 
       {showRecommended && (
         <InsightPanel
@@ -988,6 +1108,9 @@ export function ProductInsightsScreen() {
           initialTooltip={variant === 'tooltip'}
           onClose={() => setVariant('collapsed')}
           rows={panelRows}
+          // Normally the GeneratingOverlay has already covered this wait, but a deep link
+          // (?v=recommended) can open the panel before the fetch settles — shimmer, don't mock.
+          loading={!insightsSettled}
           preferences={preferences}
           sources={sources}
         />
@@ -1003,6 +1126,7 @@ export function ProductInsightsScreen() {
           initialTooltip={false}
           onClose={() => setVariant('collapsed')}
           rows={notRecPanelRows}
+          loading={notRecLoading}
           preferences={preferences}
           sources={sources}
           // Anchor under the grey card whose badge was clicked. Still draggable.
