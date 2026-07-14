@@ -45,13 +45,9 @@ const asset = {
 
 /* ---------- Shared primitives ---------- */
 
-/** Connie "C" avatar (32px black circle). */
+/** Connie "C" avatar (32px logo image). */
 function Avatar() {
-  return (
-    <div className="flex size-[32px] shrink-0 items-center justify-center rounded-full bg-fg-primary">
-      <span className="text-[12px] font-semibold leading-[16px] text-fg-inverse">C</span>
-    </div>
-  )
+  return <img src="/figma/C.png" alt="Connie" className="size-[32px] shrink-0 object-contain" />
 }
 
 /** A chat message group: avatar + 402px content column (gap 16). */
@@ -348,7 +344,7 @@ export function PriorityInferenceScreen() {
     timerRef.current = window.setTimeout(() => {
       setThinking(false)
       go(n)
-    }, 5000)
+    }, 2000)
   }
   const answerLiving = (label: string) => {
     setChosenLiving(label)

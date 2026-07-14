@@ -255,11 +255,7 @@ export function ChatScreen() {
       >
         {/* Header */}
         <div className="flex w-full shrink-0 items-center gap-[10px] overflow-clip px-[20px] py-[18px]">
-          <div className="relative size-[34px] shrink-0 overflow-clip rounded-[8px] bg-fg-primary">
-            <span className="absolute left-[10px] top-[6px] whitespace-nowrap text-[18px] font-semibold leading-[22px] tracking-[-0.25px] text-white">
-              C
-            </span>
-          </div>
+          <img src="/figma/C.png" alt="Connie" className="size-[34px] shrink-0 object-contain" />
           <div className="flex min-w-px flex-1 flex-col items-start overflow-clip whitespace-nowrap">
             <p className="text-[16px] font-semibold leading-[24px] text-fg-primary">Connie</p>
             <p className="text-[14px] leading-[20px] text-fg-secondary">Consumer Reports</p>

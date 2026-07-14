@@ -76,19 +76,20 @@ export function NaviRail({
         </div>
       )}
 
-      {/* The "C" launcher. */}
+      {/* The Connie "C" launcher (logo image). */}
       <button
         aria-label="Connie"
         onClick={() => setHover((h) => !h)}
-        className="relative size-[60px] shrink-0 rounded-[8px] bg-brand"
-        style={highlighted ? { border: '2px solid #050500' } : undefined}
-      >
-        <span className="absolute left-[18px] top-[7px] text-[32px] font-semibold leading-[36px] tracking-[-1.5px] text-white">
-          C
-        </span>
-        {notify && (
-          <span className="absolute left-[51px] top-[-4px] size-[14px] rounded-full border-2 border-white bg-rating-excellent" />
+        className={cn(
+          'relative size-[60px] shrink-0 rounded-full',
+          highlighted && 'ring-2 ring-fg-primary ring-offset-2',
         )}
+      >
+        <img
+          src={notify ? '/figma/C_notification.png' : '/figma/C.png'}
+          alt="Connie"
+          className="size-full object-contain"
+        />
       </button>
     </div>
   )

@@ -299,7 +299,7 @@ export function AnnotationsScreen() {
       closeTimer.current = null
     }
   }
-  // The 5s is a FLOOR, not the resolve condition. `loading` only becomes `result` once the
+  // The 2s is a FLOOR, not the resolve condition. `loading` only becomes `result` once the
   // annotation fetch has actually settled (see the promotion effect below) — otherwise the callout
   // opens on a timer and renders the baked copy, which is indistinguishable from a real verdict.
   const [verifyMinDone, setVerifyMinDone] = useState(false)
@@ -309,7 +309,7 @@ export function AnnotationsScreen() {
     if (hoverTimer.current) window.clearTimeout(hoverTimer.current)
     setVerifyMinDone(false)
     setPhase('loading')
-    hoverTimer.current = window.setTimeout(() => setVerifyMinDone(true), 5000)
+    hoverTimer.current = window.setTimeout(() => setVerifyMinDone(true), 2000)
   }
   /** Cursor left; dismiss after a grace period unless it comes back or the callout is pinned. */
   const cancelVerifySoon = () => {

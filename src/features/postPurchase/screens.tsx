@@ -68,11 +68,7 @@ function ConniePanel({
     >
       {/* Header — 1052:4838 */}
       <div className="flex w-full shrink-0 items-center gap-[10px] overflow-clip px-[20px] py-[18px]">
-        <div className="relative size-[34px] shrink-0 overflow-clip rounded-[8px] bg-fg-primary">
-          <span className="absolute left-[10px] top-[6px] whitespace-nowrap text-[18px] font-semibold leading-[22px] tracking-[-0.25px] text-white">
-            C
-          </span>
-        </div>
+        <img src="/figma/C.png" alt="Connie" className="size-[34px] shrink-0 object-contain" />
         <div className="flex min-w-px flex-1 flex-col items-start overflow-clip whitespace-nowrap">
           <p className="text-[16px] font-semibold leading-[24px] text-fg-primary">Connie</p>
           <p className="text-[14px] leading-[20px] text-fg-secondary">Consumer Reports</p>
@@ -349,27 +345,6 @@ export function PostPurchaseScreen() {
           {step === 7 && <ThanksBanner stat={stat} />}
         </ConniePanel>
       )}
-
-      <StepPager step={step} go={go} />
     </FigmaFrame>
-  )
-}
-
-/** Minimal fixed pager to advance between step variants (dev control). */
-function StepPager({ step, go }: { step: number; go: (n: number) => void }) {
-  const btn: CSSProperties = { width: 26, height: 26 }
-  const labels = ['Pre', 'PP1', 'PP2', 'PP3', 'PP4', 'PP5', 'PP8', 'PP9']
-  return (
-    <div className="fixed bottom-[14px] left-[14px] z-50 flex items-center gap-[6px] rounded-pill bg-black/70 px-[10px] py-[6px] text-[12px] font-medium text-white">
-      <button style={btn} onClick={() => go(step - 1)} aria-label="Previous step">
-        ‹
-      </button>
-      <span className="min-w-[64px] text-center">
-        {labels[step]} · {step + 1}/{STEP_COUNT}
-      </span>
-      <button style={btn} onClick={() => go(step + 1)} aria-label="Next step">
-        ›
-      </button>
-    </div>
   )
 }

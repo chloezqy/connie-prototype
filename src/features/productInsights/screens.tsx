@@ -1105,16 +1105,16 @@ export function ProductInsightsScreen() {
 
   // "Generating insights" shimmer over the product images, before the badges appear.
   //
-  // Chloe's version was a blind `setTimeout(…, 5000)` — it cleared after 5s whether or not the
-  // backend had answered, so a slow call (or a Vertex 429) would reveal the badges and then serve
-  // mock rows behind an animation that claimed we'd analysed the page. Now it holds until the real
-  // fetch settles, with her 5s as a FLOOR so it never flashes, and a 20s ceiling so a hung backend
-  // can't trap the user behind a permanent shimmer.
+  // Chloe's version was a blind `setTimeout(…, 5000)` — it cleared after a fixed delay whether or
+  // not the backend had answered, so a slow call (or a Vertex 429) would reveal the badges and then
+  // serve mock rows behind an animation that claimed we'd analysed the page. Now it holds until the
+  // real fetch settles, with a 2s FLOOR so it never flashes, and a ceiling so a hung backend can't
+  // trap the user behind a permanent shimmer.
   //
   // If the answer is already cached (we've been on this screen before), skip the whole thing —
-  // re-running a 5s "Analyzing…" animation over data we already have is theatre, not feedback.
+  // re-running an "Analyzing…" animation over data we already have is theatre, not feedback.
   const alreadyCached = livePayload !== null
-  const MIN_SHIMMER_MS = 5000
+  const MIN_SHIMMER_MS = 2000
   // Ceiling only, for a hung backend. It must be comfortably LONGER than a real call: a
   // `product_insights` request does live web searches and routinely runs past 20s. Set it too low
   // and the ceiling fires mid-flight, revealing the mock rows while the real answer is still on its
