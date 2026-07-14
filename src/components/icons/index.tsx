@@ -165,3 +165,109 @@ export const IconCards = ({ size = 20, ...p }: IconProps) => (
     <rect x="4" y="14" width="16" height="7" rx="2" />
   </svg>
 )
+
+/* ---------------------------------------------------------------------------
+ * Shopping-value icons — one per onboarding priority (N4b). The same glyphs are
+ * reused wherever a priority is named (the BASED ON popover, the chat's priority
+ * list), so a value looks the same everywhere it appears.
+ * ------------------------------------------------------------------------- */
+
+/** Long-term reliability. */
+export const IconShieldCheck = ({ size = 20, ...p }: IconProps) => (
+  <svg {...base(size)} {...p}>
+    <path d="M12 3l7 3v5.5c0 4.6-3 8.4-7 9.5-4-1.1-7-4.9-7-9.5V6l7-3z" />
+    <path d="M9 12l2.2 2.2L15.5 10" />
+  </svg>
+)
+
+/** Value for price. */
+export const IconTag = ({ size = 20, ...p }: IconProps) => (
+  <svg {...base(size)} {...p}>
+    <path d="M3.5 12.6V4.5a1 1 0 0 1 1-1h8.1a1 1 0 0 1 .7.3l7.1 7.1a1 1 0 0 1 0 1.4l-8.1 8.1a1 1 0 0 1-1.4 0L3.8 13.3a1 1 0 0 1-.3-.7z" />
+    <circle cx="8" cy="8" r="1.4" />
+  </svg>
+)
+
+/** Aesthetics. */
+export const IconSparkle = ({ size = 20, ...p }: IconProps) => (
+  <svg {...base(size)} {...p}>
+    <path d="M11 3l1.9 5.1L18 10l-5.1 1.9L11 17l-1.9-5.1L4 10l5.1-1.9L11 3z" />
+    <path d="M18 15l.8 2.2L21 18l-2.2.8L18 21l-.8-2.2L15 18l2.2-.8L18 15z" />
+  </svg>
+)
+
+/** Ease of use. */
+export const IconHandTap = ({ size = 20, ...p }: IconProps) => (
+  <svg {...base(size)} {...p}>
+    <path d="M9 11V5.5a1.75 1.75 0 0 1 3.5 0V11" />
+    <path d="M12.5 11V9.5a1.75 1.75 0 0 1 3.5 0V12" />
+    <path d="M16 12v-.5a1.75 1.75 0 0 1 3.5 0V15a6 6 0 0 1-6 6h-1.6a5 5 0 0 1-3.8-1.7L5 15.4a1.7 1.7 0 0 1 2.5-2.3L9 14.5V11" />
+  </svg>
+)
+
+/** Sustainability. */
+export const IconLeaf = ({ size = 20, ...p }: IconProps) => (
+  <svg {...base(size)} {...p}>
+    <path d="M20 4c0 9-5.5 13-11 13a5.5 5.5 0 0 1-1.4-10.8C12 5 15 8 20 4z" />
+    <path d="M4 20c1.5-4.5 4.5-8 9-10" />
+  </svg>
+)
+
+/* --------------------------------------------------------------------------
+ * Product-detail icons — the six rows behind "Show details" in Decision Support.
+ * ------------------------------------------------------------------------ */
+
+/** Safety rating. */
+export const IconSafety = ({ size = 20, ...p }: IconProps) => (
+  <svg {...base(size)} {...p}>
+    <path d="M12 3l7 3v5.5c0 4.6-3 8.4-7 9.5-4-1.1-7-4.9-7-9.5V6l7-3z" />
+    <path d="M12 8v4.5M12 15.5h.01" />
+  </svg>
+)
+
+/** Maneuverability. */
+export const IconCompass = ({ size = 20, ...p }: IconProps) => (
+  <svg {...base(size)} {...p}>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M15.5 8.5l-2 5-5 2 2-5 5-2z" />
+  </svg>
+)
+
+/** Fold / portability. */
+export const IconFold = ({ size = 20, ...p }: IconProps) => (
+  <svg {...base(size)} {...p}>
+    <path d="M4 20L20 4M4 20h6M4 20v-6" />
+    <path d="M20 4h-6M20 4v6" />
+  </svg>
+)
+
+/** Comfort. */
+export const IconComfort = ({ size = 20, ...p }: IconProps) => (
+  <svg {...base(size)} {...p}>
+    <path d="M4 15a8 8 0 0 1 16 0" />
+    <path d="M2 15h20M6 15v4M18 15v4" />
+  </svg>
+)
+
+/** Weight. */
+export const IconWeight = ({ size = 20, ...p }: IconProps) => (
+  <svg {...base(size)} {...p}>
+    <path d="M7 8h10l2.5 12h-15L7 8z" />
+    <circle cx="12" cy="5.5" r="2.5" />
+  </svg>
+)
+
+/** Durability. */
+export const IconDurability = ({ size = 20, ...p }: IconProps) => (
+  <svg {...base(size)} {...p}>
+    <path d="M12 2.5l2.6 5.4 5.9.8-4.3 4.1 1 5.9L12 15.9l-5.2 2.8 1-5.9-4.3-4.1 5.9-.8L12 2.5z" />
+  </svg>
+)
+
+/** Price / value. */
+export const IconPrice = ({ size = 20, ...p }: IconProps) => (
+  <svg {...base(size)} {...p}>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M14.5 9.2a2.8 2.8 0 0 0-2.5-1.2c-1.5 0-2.5.8-2.5 2s1 1.8 2.5 2 2.5.8 2.5 2-1 2-2.5 2a2.8 2.8 0 0 1-2.5-1.2M12 6.5v11" />
+  </svg>
+)

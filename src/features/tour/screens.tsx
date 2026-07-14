@@ -7,50 +7,10 @@ import { RetailBackdrop } from '@/components/connie/RetailBackdrop'
 import { routes } from '@/app/routes'
 
 /* ---------- Tour asset paths (public/figma, prefix "tour-") ---------- */
-const AMAZON_BG = '/figma/tour-amazon-bg.png'
-const DETAIL_BG = '/figma/tour-detail-bg.png'
 const STAR = '/figma/tour-star.png'
-const NAVIBAR = '/figma/tour-navibar.png'
 
 const BUBBLE_SHADOW = '0px 4px 8px rgba(5,5,0,0.02), 0px 2px 4px rgba(5,5,0,0.16)'
 const PILL_SHADOW = '0px 8px 24px 0px rgba(0,0,0,0.14)'
-
-/* ---------- Backdrops (dimmed retailer page behind the coach marks) ---------- */
-function AmazonBackdrop() {
-  return (
-    <img
-      alt=""
-      src={AMAZON_BG}
-      className="pointer-events-none absolute object-cover"
-      style={{ left: -110, top: 0, width: 1720, height: 1074, opacity: 0.4 }}
-    />
-  )
-}
-function DetailBackdrop() {
-  return (
-    <img
-      alt=""
-      src={DETAIL_BG}
-      className="pointer-events-none absolute object-cover"
-      style={{ left: -1, top: -1, width: 1440, height: 900, opacity: 0.4 }}
-    />
-  )
-}
-
-/* ---------- Floating CR launcher (green active variant used by the tour) ---------- */
-function Launcher({ style, highlighted = false }: { style?: CSSProperties; highlighted?: boolean }) {
-  return (
-    <div className="absolute" style={style}>
-      <div
-        className="relative size-[60px] rounded-[8px] bg-brand"
-        style={highlighted ? { border: '2px solid #050500' } : undefined}
-      >
-        <span className="absolute left-[18px] top-[7px] font-semibold text-title1 text-fg-inverse">C</span>
-        <span className="absolute left-[51px] top-[-4px] size-[14px] rounded-full border-2 border-white bg-[#4dcc73]" />
-      </div>
-    </div>
-  )
-}
 
 /* ---------- Star badge over the highlighted product (T1 / T2) ---------- */
 function StarBadge({ withBorder }: { withBorder: boolean }) {
@@ -92,48 +52,21 @@ function ArrowLeft() {
     />
   )
 }
-function ArrowRight() {
-  return (
-    <div
-      style={{
-        width: 0,
-        height: 0,
-        borderTop: '16px solid transparent',
-        borderBottom: '16px solid transparent',
-        borderLeft: '14px solid #050500',
-      }}
-    />
-  )
-}
 
 /* ---------- Dark tooltip bubble ---------- */
-function Bubble({
-  title,
-  body,
-  gap,
-  bodyMuted = false,
-}: {
-  title: string
-  body: string
-  gap: number
-  bodyMuted?: boolean
-}) {
+function Bubble({ title, body, gap }: { title: string; body: string; gap: number }) {
   return (
     <div
-      className="flex flex-col items-start rounded-[8px] bg-fg-primary px-[32px] py-[24px]"
+      className="flex flex-col items-start rounded-[8px] bg-fg-primary px-[32px] py-[26px]"
       style={{ gap, boxShadow: BUBBLE_SHADOW }}
     >
-      <div className="flex flex-col items-start gap-[4px]">
-        <p className="whitespace-nowrap text-[16px] font-semibold leading-[24px] text-fg-inverse">{title}</p>
-        {bodyMuted ? (
-          <p className="text-[14px] font-normal leading-[20px] text-[#d8d9d4]" style={{ width: 300 }}>
-            {body}
-          </p>
-        ) : (
-          <p className="text-[16px] font-normal leading-[24px] text-fg-inverse" style={{ width: 300 }}>
-            {body}
-          </p>
-        )}
+      <div className="flex flex-col items-start gap-[8px]">
+        <p className="text-[20px] font-semibold leading-[28px] tracking-[-0.25px] text-fg-inverse">
+          {title}
+        </p>
+        <p className="text-[18px] font-normal leading-[26px] text-[#e4e5e0]" style={{ width: 340 }}>
+          {body}
+        </p>
       </div>
     </div>
   )
@@ -154,16 +87,7 @@ function Progress({ active }: { active: number }) {
   )
 }
 
-/* ---------- Bottom control pill (steps 1–4) ---------- */
-function GreenButton({
-  label,
-  width,
-  onClick,
-}: {
-  label: ReactNode
-  width: number
-  onClick: () => void
-}) {
+function GreenButton({ label, width, onClick }: { label: ReactNode; width: number; onClick: () => void }) {
   return (
     <button
       onClick={onClick}
@@ -212,23 +136,47 @@ function Controls({
 }
 
 /* ================================================================
-   Tour — T1–T4 guided coach marks over the retailer page.
-   One route (/browse/tour), stepped via local state; Next advances.
+   The shopper's first Amazon page.
+   Connie sits idle bottom-left with an unread badge; clicking it starts the coach marks.
+   The page is full colour until the tour opens — the dimming IS the tour's spotlight, so it's
+   the one place Connie is allowed to fade the page out.
    ================================================================ */
 export function TourScreen() {
-  const [step, setStep] = useState(0)
+  /** `null` = Connie hasn't been opened yet. */
+  const [step, setStep] = useState<number | null>(null)
   const navigate = useNavigate()
+  const started = step !== null
   const skip = () => navigate(routes.insights)
   const next = () => {
+    if (step === null) return
     if (step >= 2) navigate(routes.insights)
     else setStep(step + 1)
   }
-  const active = Math.min(step, 2)
+  const active = Math.min(step ?? 0, 2)
 
-  /* ---- Steps 1–3 — over the Amazon product grid ---- */
   return (
     <FigmaFrame>
       <RetailBackdrop />
+      {/* Spotlight scrim — only while the tour is actually running. */}
+      {started && <div aria-hidden className="absolute inset-0 bg-[rgba(5,5,0,0.45)]" />}
+
+      {/* Nudge bubble — the "click me" cue before the tour starts. */}
+      {!started && (
+        <div className="absolute flex items-center" style={{ left: 122, bottom: 62 }}>
+          <div
+            style={{
+              width: 0,
+              height: 0,
+              borderTop: '10px solid transparent',
+              borderBottom: '10px solid transparent',
+              borderRight: '10px solid #050500',
+            }}
+          />
+          <span className="whitespace-nowrap rounded-[8px] bg-fg-primary px-[16px] py-[11px] text-[15px] font-medium text-white shadow-panel">
+            👋 I've got CR's take on this page — open me
+          </span>
+        </div>
+      )}
 
       {/* Step 1 & 2 — highlight the middle product card + star badge */}
       {(step === 0 || step === 1) && (
@@ -240,8 +188,8 @@ export function TourScreen() {
               top: 117,
               width: 380,
               height: 377,
-              background: 'rgba(5,5,0,0.08)',
-              border: '2px solid #989991',
+              background: 'rgba(255,255,255,0.14)',
+              border: '2px solid #c4e860',
             }}
           />
           <StarBadge withBorder={step === 1} />
@@ -250,7 +198,7 @@ export function TourScreen() {
 
       {/* Step 1 tooltip — below the card, arrow up */}
       {step === 0 && (
-        <div className="absolute flex flex-col items-start" style={{ left: 696, top: 510 }}>
+        <div className="absolute flex flex-col items-start" style={{ left: 676, top: 510 }}>
           <ArrowUp style={{ marginLeft: 32 }} />
           <Bubble
             title="Connie stars the picks that fit you"
@@ -262,7 +210,7 @@ export function TourScreen() {
 
       {/* Step 2 tooltip — beside the badge, arrow up */}
       {step === 1 && (
-        <div className="absolute flex flex-col items-start" style={{ left: 778, top: 164 }}>
+        <div className="absolute flex flex-col items-start" style={{ left: 758, top: 164 }}>
           <ArrowUp style={{ marginLeft: 32 }} />
           <Bubble
             title="Tap a star for CR's take"
@@ -274,27 +222,34 @@ export function TourScreen() {
 
       {/* Step 3 — reveal the Navi bar AND the tooltip beside the launcher, together */}
       {step === 2 && (
-        <div className="absolute flex items-center" style={{ left: 152, top: 690 }}>
+        <div className="absolute flex items-center" style={{ left: 152, top: 672 }}>
           <ArrowLeft />
           <Bubble
             title="Open Connie anytime"
             body="Your panel lives on the left. Hover the C to open the menu — chat, saved, settings, help."
             gap={0}
-            bodyMuted
           />
         </div>
       )}
 
-      <Controls
-        showSkip={step === 0 || step === 1}
-        active={active}
-        buttonLabel={step <= 1 ? 'Next' : 'Got it'}
-        buttonWidth={step === 1 ? 75 : 80}
-        onSkip={skip}
-        onNext={next}
-      />
+      {started && (
+        <Controls
+          showSkip={step === 0 || step === 1}
+          active={active}
+          buttonLabel={step !== null && step <= 1 ? 'Next' : 'Got it'}
+          buttonWidth={step === 1 ? 75 : 80}
+          onSkip={skip}
+          onNext={next}
+        />
+      )}
 
-      <NaviRail forceOpen={step === 2} highlighted={step === 2} />
+      <NaviRail
+        notify={!started}
+        pulse={!started}
+        onLauncherClick={!started ? () => setStep(0) : undefined}
+        forceOpen={step === 2}
+        highlighted={step === 2}
+      />
     </FigmaFrame>
   )
 }

@@ -42,7 +42,7 @@ export const router = createBrowserRouter([
   { path: routes.permissions, element: <PermissionsScreen /> },
   { path: routes.done, element: <DoneScreen /> },
 
-  { path: '/browse/tour', element: <TourScreen /> },
+  { path: routes.tour, element: <TourScreen /> },
   { path: routes.insights, element: <ProductInsightsScreen /> },
   { path: routes.annotations, element: <AnnotationsScreen /> },
   { path: routes.priorities, element: <PriorityInferenceScreen /> },

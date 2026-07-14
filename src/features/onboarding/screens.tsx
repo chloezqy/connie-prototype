@@ -1,15 +1,28 @@
 import { useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { FigmaFrame } from '@/layouts/FigmaFrame'
+import { BrowserChrome, CHROME_H, GoogleFavicon } from '@/components/browser/BrowserChrome'
+import { GoogleNewTab } from '@/components/browser/GoogleNewTab'
+import { GoogleResults } from '@/components/browser/GoogleResults'
+import { ConnieHeader } from '@/components/connie/ConnieHeader'
 import { NaviRail } from '@/components/connie/NaviRail'
-import { IconX, IconCheck, IconInfo, IconStar, IconShare, IconCaretLeft, IconCaretRight } from '@/components/icons'
+import {
+  IconCheck,
+  IconInfo,
+  IconStar,
+  IconShare,
+  IconCaretLeft,
+  IconCaretRight,
+  IconShieldCheck,
+  IconTag,
+  IconSparkle,
+  IconHandTap,
+  IconLeaf,
+} from '@/components/icons'
 import { routes } from '@/app/routes'
 import { useJourneyStore } from '@/store/useJourneyStore'
 import { usePreferences } from '@/store/usePreferences'
-
-/** Shared onboarding backdrop — the dimmed Google "best stroller 2026" page (from Figma). */
-export const onboardingGoogleBg = '/figma/onboarding-google-bg.png'
 
 /* ---------- Onboarding asset paths (public/figma) ---------- */
 const asset = {
@@ -22,12 +35,9 @@ const asset = {
   commTiktok: '/figma/comm-tiktok.svg',
   commPinterest: '/figma/comm-pinterest.svg',
   commGoogle: '/figma/comm-google.svg',
-  prioritiesInfo: '/figma/priorities-info.svg',
-  permInfo: '/figma/perm-info.svg',
   permReader: '/figma/perm-reader.svg',
   permNote: '/figma/perm-note.svg',
   permBlock: '/figma/perm-block.svg',
-  installNav: '/figma/install-nav.png',
   installHero: '/figma/install-hero-mockup.png',
   installCrLogo: '/figma/install-cr-logo.png',
   installSoftStar: '/figma/install-softstar.svg',
@@ -35,39 +45,53 @@ const asset = {
   installMedal: '/figma/install-medal.svg',
 }
 
+/** The query the shopper runs once onboarding is done. */
+const SEARCH_QUERY = 'best stroller 2026'
+
 /* ---------- Shared onboarding primitives ---------- */
 
-/** Connie onboarding panel — absolute 520px card at left 864 / top 72 (Figma). */
+/**
+ * The Connie extension popup. It hangs off the extension icon in the browser toolbar (hence the
+ * caret), and carries the shared Connie header — the same one every other Connie panel wears.
+ */
 function Panel({
   gap,
   center = false,
   style,
+  onClose,
   children,
 }: {
   gap: number
   center?: boolean
   style?: CSSProperties
+  onClose: () => void
   children: ReactNode
 }) {
   return (
-    <div
-      className={`absolute flex flex-col overflow-clip rounded-md border border-border-subtle bg-bg-secondary p-[36px] shadow-panel ${
-        center ? 'items-center' : 'items-start'
-      }`}
-      style={{ left: 864, top: 72, width: 520, gap, ...style }}
-    >
-      {children}
-    </div>
-  )
-}
-
-function CloseX({ onClick }: { onClick: () => void }) {
-  return (
-    <div className="flex w-full flex-col items-end">
-      <button aria-label="Close" onClick={onClick} className="text-fg-primary">
-        <IconX size={22} />
-      </button>
-    </div>
+    <>
+      {/* Caret pointing up at the toolbar's Connie icon. */}
+      <div
+        className="absolute z-10"
+        style={{
+          left: 1351,
+          top: CHROME_H - 1,
+          width: 0,
+          height: 0,
+          borderLeft: '9px solid transparent',
+          borderRight: '9px solid transparent',
+          borderBottom: '9px solid var(--color-bg-secondary)',
+        }}
+      />
+      <div
+        className={`absolute flex flex-col overflow-y-auto rounded-md border border-border-subtle bg-bg-secondary p-[28px] shadow-panel ${
+          center ? 'items-center' : 'items-start'
+        }`}
+        style={{ left: 864, top: CHROME_H + 8, width: 520, maxHeight: 900 - CHROME_H - 24, gap, ...style }}
+      >
+        <ConnieHeader onClose={onClose} />
+        {children}
+      </div>
+    </>
   )
 }
 
@@ -104,137 +128,14 @@ function OutlineButton({ children, onClick }: { children: ReactNode; onClick?: (
   )
 }
 
-/* ---------- Empty Google search page (mock) ---------- */
+/** The browser tabs shown across the onboarding + search screens. */
+const TABS = (activeTitle: string) => [
+  { title: 'Baby registry checklist', favicon: <GoogleFavicon size={14} /> },
+  { title: activeTitle, active: true },
+  { title: 'Inbox (3)', favicon: <GoogleFavicon size={14} /> },
+]
 
-/** Colorful "Google" wordmark. */
-function GoogleWordmark() {
-  const letters: [string, string][] = [
-    ['G', '#4285F4'],
-    ['o', '#EA4335'],
-    ['o', '#FBBC05'],
-    ['g', '#4285F4'],
-    ['l', '#34A853'],
-    ['e', '#EA4335'],
-  ]
-  return (
-    <p className="font-sans text-[92px] font-medium leading-none" style={{ letterSpacing: '-3px' }}>
-      {letters.map(([ch, c], i) => (
-        <span key={i} style={{ color: c }}>
-          {ch}
-        </span>
-      ))}
-    </p>
-  )
-}
-
-/**
- * Empty Google homepage. `dim` fades it behind the onboarding panels; when `onQuery`/`onSearch`
- * are passed the search box is live (used by the SearchScreen).
- */
-function GoogleHome({
-  dim = false,
-  query,
-  onQuery,
-  onSearch,
-}: {
-  dim?: boolean
-  query?: string
-  onQuery?: (v: string) => void
-  onSearch?: () => void
-}) {
-  return (
-    <div className="absolute inset-0 bg-white" style={{ opacity: dim ? 0.5 : 1 }}>
-      {/* top-right chrome */}
-      <div className="absolute right-[26px] top-[24px] flex items-center gap-[22px] text-[14px] text-[#3c4043]">
-        <span>Gmail</span>
-        <span>Images</span>
-        <span className="text-[20px] text-[#5f6368]">▦</span>
-        <span className="flex size-[36px] items-center justify-center rounded-full bg-[#a0c3ff] text-[15px] font-medium text-[#1a3d7c]">
-          A
-        </span>
-      </div>
-      {/* centered content */}
-      <div className="flex h-full flex-col items-center pt-[210px]">
-        <GoogleWordmark />
-        <div className="mt-[30px] flex h-[48px] w-[580px] items-center gap-[14px] rounded-full border border-[#dfe1e5] px-[20px] shadow-[0_1px_6px_rgba(32,33,36,0.12)]">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#9aa0a6" strokeWidth="2">
-            <circle cx="11" cy="11" r="7" />
-            <path d="M21 21l-4.3-4.3" strokeLinecap="round" />
-          </svg>
-          <input
-            value={query ?? ''}
-            readOnly={!onQuery}
-            autoFocus={!!onQuery}
-            onChange={(e) => onQuery?.(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && (query ?? '').trim()) onSearch?.()
-            }}
-            placeholder=""
-            className="h-full flex-1 bg-transparent text-[16px] text-[#202124] outline-none"
-          />
-        </div>
-        <div className="mt-[28px] flex gap-[12px]">
-          <button
-            onClick={() => (query ?? '').trim() && onSearch?.()}
-            className="rounded-[4px] bg-[#f8f9fa] px-[18px] py-[9px] text-[14px] text-[#3c4043]"
-          >
-            Google Search
-          </button>
-          <button className="rounded-[4px] bg-[#f8f9fa] px-[18px] py-[9px] text-[14px] text-[#3c4043]">
-            I&rsquo;m Feeling Lucky
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-/* Post-install — empty Google page with the Connie "C". Click it to start onboarding. */
-export function SearchScreen() {
-  const navigate = useNavigate()
-  const [query, setQuery] = useState('')
-  return (
-    <FigmaFrame>
-      <GoogleHome query={query} onQuery={setQuery} onSearch={() => navigate(routes.results)} />
-
-      {/* The just-installed Connie launcher — clicking it opens onboarding. */}
-      <div className="absolute size-[60px]" style={{ left: 52, bottom: 48 }}>
-        <span className="pointer-events-none absolute inset-0 animate-ping rounded-full bg-brand opacity-30" />
-        <button
-          aria-label="Open Connie"
-          onClick={() => navigate(routes.welcome)}
-          className="relative block size-[60px]"
-        >
-          <img src="/figma/C.png" alt="Connie" className="size-full object-contain" />
-        </button>
-        <span className="absolute left-[72px] top-[14px] whitespace-nowrap rounded-[8px] bg-fg-primary px-[12px] py-[8px] text-[13px] font-medium text-white shadow-panel">
-          👋 Tap Connie to get set up
-        </span>
-      </div>
-    </FigmaFrame>
-  )
-}
-
-/* Search results — the stroller results page. Click "Amazon" to open the product. */
-export function ResultsScreen() {
-  const navigate = useNavigate()
-  return (
-    <FigmaFrame backdrop={onboardingGoogleBg} backdropOpacity={1}>
-      {/* Highlighted "Amazon" retailer link on the results page */}
-      <button
-        onClick={() => navigate('/browse/tour')}
-        className="absolute flex h-[23px] w-[80px] items-center justify-center rounded-[3px] bg-bg-tertiary p-[3px] ring-2 ring-brand"
-        style={{ left: 360, top: 474 }}
-      >
-        <span className="whitespace-nowrap text-title4 font-semibold text-fg-secondary">Amazon</span>
-      </button>
-
-      <NaviRail />
-    </FigmaFrame>
-  )
-}
-
-/* N0 — Chrome Web Store install (node 1052:7120) */
+/* ---------- N0 · Chrome Web Store install ---------- */
 export function InstallScreen() {
   const navigate = useNavigate()
   const setInstalled = useJourneyStore((s) => s.setInstalled)
@@ -242,7 +143,7 @@ export function InstallScreen() {
     setInstalled(true)
     navigate(routes.search)
   }
-  const metaText = "font-medium text-[16.337px]"
+  const metaText = 'font-medium text-[16.337px]'
   return (
     <FigmaFrame>
       {/* Navigation bar — approximated Chrome Web Store chrome */}
@@ -330,7 +231,6 @@ export function InstallScreen() {
 
       {/* Hero gallery */}
       <div className="absolute" style={{ left: 76, top: 326, width: 1296, height: 353 }}>
-        {/* Green Connie card */}
         <div
           className="absolute top-0 rounded-[7px] bg-[#c4e860] shadow-[0px_0px_5px_1px_rgba(0,0,0,0.25)]"
           style={{ left: 57, width: 564, height: 353 }}
@@ -357,7 +257,6 @@ export function InstallScreen() {
             />
           </div>
         </div>
-        {/* Mockup screenshot card */}
         <img
           alt=""
           src={asset.installHero}
@@ -387,60 +286,119 @@ export function InstallScreen() {
   )
 }
 
-/* N1 — Welcome (node 1052:2134) */
-export function WelcomeScreen() {
+/* ---------- The new tab · the shopper's home base ----------
+ * Before onboarding: no "C" on the page — the extension only exists as a toolbar icon, and
+ * clicking it is what opens onboarding. After onboarding (`?ready=1`, set by the Done screen)
+ * the "C" launcher appears, and the shopper runs their first search. */
+export function SearchScreen() {
   const navigate = useNavigate()
+  const [params] = useSearchParams()
+  const onboarded = useJourneyStore((s) => s.onboardingComplete) || params.get('ready') === '1'
+  const [query, setQuery] = useState(onboarded ? SEARCH_QUERY : '')
+
+  const search = () => navigate(`${routes.results}?q=${encodeURIComponent(query)}`)
+
   return (
     <FigmaFrame>
-      <GoogleHome dim />
-      {/* Connie panel — 1052:2135 */}
-      <div
-        className="absolute flex flex-col items-start gap-[20px] overflow-clip rounded-md border border-border-subtle bg-bg-secondary p-[36px] shadow-panel"
-        style={{ left: 864, top: 72, width: 520 }}
-      >
-        <div className="flex w-full flex-col items-end">
-          <button aria-label="Close" onClick={() => navigate('/')} className="text-fg-primary">
-            <IconX size={22} />
-          </button>
-        </div>
-        <div className="flex w-full flex-col gap-[8px]">
-          <p className="text-eyebrow font-semibold uppercase text-fg-brand">WELCOME · JUST INSTALLED</p>
-          <p className="text-title1 font-semibold text-fg-primary">
-            Know what's worth buying, before you buy.
-          </p>
-        </div>
-        <p className="w-full text-body text-fg-secondary">
-          Consumer Reports’ (“CR”) lab results plus honest takes from shoppers like you, right on the
-          product page. Free, no sponsors.
-        </p>
-        <button
-          onClick={() => navigate(routes.memberCheck)}
-          className="flex h-[48px] w-full items-center justify-center rounded-pill bg-brand text-body font-semibold text-fg-inverse"
-        >
-          Get started
-        </button>
-      </div>
+      <BrowserChrome
+        tabs={TABS('New Tab')}
+        onExtensionClick={() => navigate(routes.welcome)}
+        highlightExtension={!onboarded}
+      />
+      <GoogleNewTab
+        query={query}
+        onQuery={setQuery}
+        onSearch={search}
+        onShortcut={(label) => label === 'Amazon' && navigate(routes.tour)}
+      />
 
+      {!onboarded && (
+        /* Coach mark pointing at the toolbar icon — the extension's only entry point. */
+        <div className="absolute flex flex-col items-end" style={{ right: 44, top: CHROME_H + 14 }}>
+          <div
+            style={{
+              width: 0,
+              height: 0,
+              marginRight: 34,
+              borderLeft: '8px solid transparent',
+              borderRight: '8px solid transparent',
+              borderBottom: '8px solid var(--color-fg-primary)',
+            }}
+          />
+          <span className="whitespace-nowrap rounded-[8px] bg-fg-primary px-[14px] py-[9px] text-[14px] font-medium text-white shadow-panel">
+            👋 Connie's installed — click the icon to get set up
+          </span>
+        </div>
+      )}
+
+      {/* The launcher only exists once onboarding is done. */}
+      {onboarded && <NaviRail />}
+    </FigmaFrame>
+  )
+}
+
+/* ---------- Google results · "best stroller 2026" ---------- */
+export function ResultsScreen() {
+  const navigate = useNavigate()
+  const [params] = useSearchParams()
+  const query = params.get('q') || SEARCH_QUERY
+  return (
+    <FigmaFrame>
+      <BrowserChrome
+        tabs={TABS(`${query} - Google Search`)}
+        url={`https://www.google.com/search?q=${query.replace(/ /g, '+')}`}
+      />
+      <GoogleResults query={query} onAmazon={() => navigate(routes.tour)} />
       <NaviRail />
     </FigmaFrame>
   )
 }
 
-/* N2 — Member check (node 1052:2148) */
+/* ---------- The onboarding popup, screen by screen ---------- */
+
+/** Shared shell: the browser + new tab page sitting behind the popup. */
+function OnboardingBackdrop() {
+  return (
+    <>
+      <BrowserChrome tabs={TABS('New Tab')} highlightExtension />
+      <GoogleNewTab query="" onQuery={() => {}} onSearch={() => {}} autoFocus={false} />
+      {/* 10% scrim — the page stays full colour behind the popup. */}
+      <div aria-hidden className="absolute inset-0" style={{ background: 'rgba(5,5,0,0.1)' }} />
+    </>
+  )
+}
+
+/* N1 — Welcome */
+export function WelcomeScreen() {
+  const navigate = useNavigate()
+  return (
+    <FigmaFrame>
+      <OnboardingBackdrop />
+      <Panel gap={20} onClose={() => navigate(routes.search)}>
+        <p className="text-title1 font-semibold text-fg-primary">
+          Know what's worth buying, before you buy.
+        </p>
+        <p className="w-full text-body text-fg-secondary">
+          Consumer Reports’ (“CR”) lab results plus honest takes from shoppers like you, right on the
+          product page. Free, no sponsors.
+        </p>
+        <PrimaryButton onClick={() => navigate(routes.memberCheck)}>Get started</PrimaryButton>
+      </Panel>
+    </FigmaFrame>
+  )
+}
+
+/* N2 — Member check */
 export function MemberCheckScreen() {
   const navigate = useNavigate()
   const setMember = useJourneyStore((s) => s.setMember)
   return (
     <FigmaFrame>
-      <GoogleHome dim />
-      <Panel gap={20}>
-        <CloseX onClick={() => navigate('/')} />
-        <div className="flex w-full flex-col gap-[8px]">
-          <p className="text-eyebrow font-semibold uppercase text-fg-brand">LOGIN OR SIGN UP</p>
-          <p className="text-title1 font-semibold text-fg-primary">
-            Nice to meet you! New here, or a CR member?
-          </p>
-        </div>
+      <OnboardingBackdrop />
+      <Panel gap={20} onClose={() => navigate(routes.search)}>
+        <p className="text-title1 font-semibold text-fg-primary">
+          Nice to meet you! New here, or a CR member?
+        </p>
         <p className="w-full text-body text-fg-secondary">
           Log in to CR to sync your favorite products or create an account.
         </p>
@@ -465,12 +423,11 @@ export function MemberCheckScreen() {
           </button>
         </div>
       </Panel>
-      <NaviRail />
     </FigmaFrame>
   )
 }
 
-/* M1 — Member log in (node 1052:5317) */
+/* M1 — Member log in */
 function MailIcon() {
   return (
     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
@@ -518,15 +475,11 @@ export function LoginScreen() {
   const setMember = useJourneyStore((s) => s.setMember)
   return (
     <FigmaFrame>
-      <GoogleHome dim />
-      <Panel gap={18}>
-        <CloseX onClick={() => navigate('/')} />
-        <div className="flex w-full flex-col gap-[8px]">
-          <p className="text-eyebrow font-semibold uppercase text-fg-brand">CR MEMBERS</p>
-          <p className="w-full text-[24px] font-semibold leading-[28px] tracking-[-0.1px] text-fg-primary">
-            Welcome! Log in to sync Connie with your CR Profile.
-          </p>
-        </div>
+      <OnboardingBackdrop />
+      <Panel gap={18} onClose={() => navigate(routes.search)}>
+        <p className="w-full text-[24px] font-semibold leading-[28px] tracking-[-0.1px] text-fg-primary">
+          Welcome! Log in to sync Connie with your CR Profile.
+        </p>
         <p className="w-full text-body text-fg-secondary">
           Your saved products, ratings, and priorities follow you here.
         </p>
@@ -545,12 +498,11 @@ export function LoginScreen() {
         </PrimaryButton>
         <OutlineButton onClick={() => navigate(routes.promise)}>Continue with Google</OutlineButton>
       </Panel>
-      <NaviRail />
     </FigmaFrame>
   )
 }
 
-/* N3 — Promise (node 1052:2165) */
+/* N3 — Promise */
 function PromiseCard({ icon, title, body }: { icon: string; title: string; body: string }) {
   return (
     <div className="flex w-full items-start gap-[16px] overflow-clip rounded-md border-[1.5px] border-border-subtle bg-white p-[18px]">
@@ -569,13 +521,9 @@ export function PromiseScreen() {
   const navigate = useNavigate()
   return (
     <FigmaFrame>
-      <GoogleHome dim />
-      <Panel gap={20}>
-        <CloseX onClick={() => navigate('/')} />
-        <div className="flex w-full flex-col gap-[8px]">
-          <p className="text-eyebrow font-semibold uppercase text-fg-brand">A QUICK PROMISE</p>
-          <p className="text-title1 font-semibold text-fg-primary">Three promises from CR to you.</p>
-        </div>
+      <OnboardingBackdrop />
+      <Panel gap={20} onClose={() => navigate(routes.search)}>
+        <p className="text-title1 font-semibold text-fg-primary">Three promises from CR to you.</p>
         <div className="flex w-full flex-col gap-[12px]">
           <PromiseCard
             icon={asset.promiseNoSponsors}
@@ -595,12 +543,11 @@ export function PromiseScreen() {
         </div>
         <PrimaryButton onClick={() => navigate(routes.surveyCommunities)}>Got it</PrimaryButton>
       </Panel>
-      <NaviRail />
     </FigmaFrame>
   )
 }
 
-/* N4a — Survey · Communities (nodes 1052:2203 empty / 1052:2254 selected) */
+/* N4a — Survey · Communities. Nothing is pre-selected: these are the shopper's answers to give. */
 const COMMUNITIES = [
   { name: 'Instagram', icon: asset.commInstagram, round: true },
   { name: 'Reddit', icon: asset.commReddit, round: false },
@@ -610,6 +557,11 @@ const COMMUNITIES = [
   { name: 'Online blogs', icon: asset.commGoogle, round: false },
 ]
 
+/** The green step eyebrow survives only on the two survey questions, where it's a progress cue. */
+function StepEyebrow({ children }: { children: ReactNode }) {
+  return <p className="text-eyebrow font-semibold uppercase text-fg-brand">{children}</p>
+}
+
 export function SurveyCommunitiesScreen() {
   const navigate = useNavigate()
   const selected = usePreferences((s) => s.sources)
@@ -617,11 +569,10 @@ export function SurveyCommunitiesScreen() {
   const canContinue = selected.length > 0
   return (
     <FigmaFrame>
-      <GoogleHome dim />
-      <Panel gap={24}>
-        <CloseX onClick={() => navigate('/')} />
+      <OnboardingBackdrop />
+      <Panel gap={24} onClose={() => navigate(routes.search)}>
         <div className="flex w-full flex-col gap-[8px]">
-          <p className="text-eyebrow font-semibold uppercase text-fg-brand">QUESTION 1 OF 2</p>
+          <StepEyebrow>Question 1 of 2</StepEyebrow>
           <p className="text-title1 font-semibold text-fg-primary">Who do you trust for honest takes?</p>
         </div>
         <div className="flex w-full flex-col gap-[15px]">
@@ -651,19 +602,18 @@ export function SurveyCommunitiesScreen() {
           Next
         </PrimaryButton>
       </Panel>
-      <NaviRail />
     </FigmaFrame>
   )
 }
 
-/* N4b — Survey · Priorities (nodes 1052:2305 empty / 1052:2337 selected) */
-const PRIORITIES = [
-  'Long-term reliability',
-  'Value for money',
-  'Aesthetics',
-  'Ease of use',
-  'Sustainability',
-  'Brand ethics',
+/* N4b — Survey · Priorities. One icon per value, matching the glyphs used everywhere else. */
+type PriorityIcon = (p: { size?: number; className?: string }) => JSX.Element
+const PRIORITIES: { label: string; Icon: PriorityIcon }[] = [
+  { label: 'Long-term reliability', Icon: IconShieldCheck },
+  { label: 'Value for price', Icon: IconTag },
+  { label: 'Aesthetics', Icon: IconSparkle },
+  { label: 'Ease of use', Icon: IconHandTap },
+  { label: 'Sustainability', Icon: IconLeaf },
 ]
 
 export function SurveyPrioritiesScreen() {
@@ -672,62 +622,62 @@ export function SurveyPrioritiesScreen() {
   const toggle = usePreferences((s) => s.togglePreference)
   return (
     <FigmaFrame>
-      <GoogleHome dim />
-      <Panel gap={24}>
-        <CloseX onClick={() => navigate('/')} />
+      <OnboardingBackdrop />
+      <Panel gap={24} onClose={() => navigate(routes.search)}>
         <div className="flex w-full flex-col gap-[8px]">
-          <p className="text-eyebrow font-semibold uppercase text-fg-brand">QUESTION 2 OF 2</p>
+          <StepEyebrow>Question 2 of 2</StepEyebrow>
           <p className="text-title1 font-semibold text-fg-primary">
             What do you usually care about when shopping?
           </p>
         </div>
         <div className="flex w-full flex-col gap-[20px]">
-          <p className="w-full text-body text-fg-primary">
-            What are some values that show up on every purchase? Pick as many as you like.
-          </p>
+          <div className="flex w-full flex-col gap-[4px]">
+            <p className="w-full text-body text-fg-primary">
+              What are some values that show up on every purchase? Pick as many as you like.
+            </p>
+            <p className="w-full text-[14px] leading-[20px] text-fg-secondary">
+              You can add more or tweak them later in the chat.
+            </p>
+          </div>
           <div className="flex w-full flex-wrap gap-[8px]">
-            {PRIORITIES.map((p) => {
-              const on = selected.includes(p)
+            {PRIORITIES.map(({ label, Icon }) => {
+              const on = selected.includes(label)
               return (
                 <button
-                  key={p}
-                  onClick={() => toggle(p)}
-                  className={`flex h-[46px] items-center justify-center overflow-clip rounded-pill bg-bg-primary px-[18px] py-[11px] ${
+                  key={label}
+                  onClick={() => toggle(label)}
+                  className={`flex h-[46px] items-center justify-center gap-[8px] overflow-clip rounded-pill bg-bg-primary px-[18px] py-[11px] ${
                     on ? 'border-2 border-border-black' : 'border border-border-subtle'
                   }`}
                 >
-                  <span className="whitespace-nowrap text-body text-fg-primary">{p}</span>
+                  <Icon size={20} className="shrink-0 text-fg-primary" />
+                  <span className="whitespace-nowrap text-body text-fg-primary">{label}</span>
                 </button>
               )
             })}
           </div>
         </div>
-        <div className="flex w-full items-start gap-[12px] overflow-clip rounded-md bg-bg-tertiary py-[16px] pl-[16px] pr-[18px]">
-          <img alt="" src={asset.prioritiesInfo} className="size-[22px] shrink-0" />
-          <p className="flex-1 text-body text-fg-secondary">
-            These two are all we ask up front. More specific priorities like budget, must-haves come up
-            in chat as you shop, only when they’re relevant.
-          </p>
-        </div>
         <PrimaryButton onClick={() => navigate(routes.permissions)}>Next</PrimaryButton>
       </Panel>
-      <NaviRail />
     </FigmaFrame>
   )
 }
 
-/* N5 — Permissions (node 1052:2385) */
-function Toggle({ on }: { on: boolean }) {
+/* N5 — Permissions */
+
+/** The two "where should Connie appear" options are mutually exclusive, so: radio, not toggle. */
+function Radio({ on }: { on: boolean }) {
   return (
-    <div className={`relative h-[32px] w-[64px] shrink-0 rounded-full ${on ? 'bg-brand' : 'bg-bg-disabled'}`}>
-      <span
-        className={`absolute top-[4px] size-[24px] rounded-full bg-white shadow-sm ${
-          on ? 'left-[36px]' : 'left-[4px]'
-        }`}
-      />
-    </div>
+    <span
+      className={`flex size-[22px] shrink-0 items-center justify-center rounded-full border-2 ${
+        on ? 'border-brand' : 'border-border-strong'
+      }`}
+    >
+      {on && <span className="size-[11px] rounded-full bg-brand" />}
+    </span>
   )
 }
+
 function PermRow({ icon, title, body }: { icon: string; title: string; body: string }) {
   return (
     <div className="flex w-full items-start gap-[13px] overflow-clip px-[18px] py-[15px]">
@@ -740,37 +690,37 @@ function PermRow({ icon, title, body }: { icon: string; title: string; body: str
   )
 }
 
+type Appearance = 'all' | 'manual'
+
 export function PermissionsScreen() {
   const navigate = useNavigate()
   const grant = useJourneyStore((s) => s.grantPermissions)
-  const [allTabs, setAllTabs] = useState(true)
-  const [manual, setManual] = useState(false)
+  const [appearance, setAppearance] = useState<Appearance>('all')
+
+  const option = (key: Appearance, title: string, body: string) => (
+    <button
+      onClick={() => setAppearance(key)}
+      className="flex w-full items-center gap-[12px] overflow-clip px-[18px] py-[15px] text-left"
+      role="radio"
+      aria-checked={appearance === key}
+    >
+      <div className="flex flex-1 flex-col gap-[2px] text-body leading-[24px]">
+        <p className="font-semibold text-fg-primary">{title}</p>
+        <p className="text-fg-secondary">{body}</p>
+      </div>
+      <Radio on={appearance === key} />
+    </button>
+  )
+
   return (
     <FigmaFrame>
-      <GoogleHome dim />
-      <div
-        className="absolute flex flex-col gap-[26px] overflow-y-auto rounded-md border border-border-subtle bg-bg-secondary p-[36px] shadow-panel"
-        style={{ left: 864, top: 72, width: 520, maxHeight: 804 }}
-      >
-        <CloseX onClick={() => navigate('/')} />
-        <div className="flex w-full flex-col gap-[7px]">
-          <p className="text-eyebrow font-semibold uppercase text-fg-brand">PERMISSIONS</p>
-          <p className="text-title1 font-semibold text-fg-primary">Connie's ready when you are.</p>
-        </div>
+      <OnboardingBackdrop />
+      <Panel gap={26} onClose={() => navigate(routes.search)}>
+        <p className="text-title1 font-semibold text-fg-primary">One last step.</p>
 
         <div className="flex w-full flex-col gap-[14px]">
-          <p className="w-full text-body text-fg-secondary">
-            Connie only reads pages you’re on then adds CR and communities’ takes. Here's exactly what
-            this means:
-          </p>
+          <p className="w-full text-body text-fg-secondary">Here's exactly what this means:</p>
           <div className="flex w-full flex-col overflow-clip rounded-md bg-bg-tertiary">
-            <div className="flex w-full items-center gap-[9px] overflow-clip px-[18px] pb-[13px] pt-[15px]">
-              <img alt="" src={asset.permInfo} className="size-[17px] shrink-0" />
-              <span className="whitespace-nowrap text-utility font-semibold uppercase text-fg-secondary">
-                WHAT THIS MEANS
-              </span>
-            </div>
-            <div className="h-[1.5px] w-full bg-border-subtle" />
             <PermRow
               icon={asset.permReader}
               title="Read product info on the page"
@@ -795,30 +745,18 @@ export function PermissionsScreen() {
           <p className="whitespace-nowrap text-[20px] font-semibold leading-[24px] tracking-[-0.5px] text-fg-primary">
             Where should Connie appear?
           </p>
-          <div className="flex w-full flex-col overflow-clip rounded-md border-[1.5px] border-border-subtle bg-white">
-            <button
-              onClick={() => setAllTabs((v) => !v)}
-              className="flex w-full items-center gap-[12px] overflow-clip px-[18px] py-[15px] text-left"
-            >
-              <div className="flex flex-1 flex-col gap-[2px] text-body leading-[24px]">
-                <p className="font-semibold text-fg-primary">Active across all tabs</p>
-                <p className="text-fg-secondary">
-                  Retailers, search, reviews & AI chats; anywhere you shop or research
-                </p>
-              </div>
-              <Toggle on={allTabs} />
-            </button>
+          <div
+            role="radiogroup"
+            aria-label="Where should Connie appear?"
+            className="flex w-full flex-col overflow-clip rounded-md border-[1.5px] border-border-subtle bg-white"
+          >
+            {option(
+              'all',
+              'Active across all tabs',
+              'Retailers, search, reviews & AI chats; anywhere you shop or research',
+            )}
             <div className="h-[1.5px] w-full bg-border-subtle" />
-            <button
-              onClick={() => setManual((v) => !v)}
-              className="flex w-full items-center gap-[12px] overflow-clip px-[18px] py-[15px] text-left"
-            >
-              <div className="flex flex-1 flex-col gap-[2px] text-body leading-[24px]">
-                <p className="font-semibold text-fg-primary">Only when I open it</p>
-                <p className="text-fg-secondary">Manual, Connie stays idle until you click it</p>
-              </div>
-              <Toggle on={manual} />
-            </button>
+            {option('manual', 'Only when I open it', 'Manual, Connie stays idle until you click it')}
           </div>
         </div>
 
@@ -830,26 +768,23 @@ export function PermissionsScreen() {
         >
           Allow &amp; continue
         </PrimaryButton>
-      </div>
-      <NaviRail />
+      </Panel>
     </FigmaFrame>
   )
 }
 
-/* N6 — Done (node 1052:2369) */
+/* N6 — Done. Closing drops the shopper back on the new tab, now with the "C" launcher. */
 export function DoneScreen() {
   const navigate = useNavigate()
   const complete = useJourneyStore((s) => s.completeOnboarding)
-  // Close onboarding → back to the (empty) Google page, where the shopper runs their first search.
   const finish = () => {
     complete()
-    navigate(routes.search)
+    navigate(`${routes.search}?ready=1`)
   }
   return (
     <FigmaFrame>
-      <GoogleHome dim />
-      <Panel gap={20} center>
-        <CloseX onClick={finish} />
+      <OnboardingBackdrop />
+      <Panel gap={20} center onClose={finish}>
         <div className="flex size-[84px] items-center justify-center rounded-[20px] bg-brand text-fg-inverse">
           <IconCheck size={46} />
         </div>
@@ -861,8 +796,6 @@ export function DoneScreen() {
         </p>
         <PrimaryButton onClick={finish}>Start shopping</PrimaryButton>
       </Panel>
-
-      <NaviRail />
     </FigmaFrame>
   )
 }

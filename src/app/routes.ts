@@ -12,6 +12,8 @@ export const routes = {
   permissions: '/onboarding/permissions',
   done: '/onboarding/done',
 
+  /** The Amazon page she lands on from Google — Connie's first tooltip lives here. */
+  tour: '/browse/tour',
   insights: '/browse/insights',
   annotations: '/browse/annotations',
   priorities: '/browse/priorities',
@@ -23,9 +25,19 @@ export const routes = {
   ds: '/ds',
 } as const
 
-/** Linear prototype order used by "Next" affordances. */
+/**
+ * The prototype's story, in order.
+ *
+ * Install from the Web Store → open a new tab → click the toolbar icon → onboard → back to the
+ * new tab (now with the "C") → search → Google results → the Amazon page (Connie's first tooltip)
+ * → insights → the product page → chat → ranking → share → the post-purchase check-in.
+ *
+ * `search` appears once here but is visited twice: before onboarding (no launcher) and after
+ * (`?ready=1`, launcher shown).
+ */
 export const flowOrder: string[] = [
   routes.install,
+  routes.search,
   routes.welcome,
   routes.memberCheck,
   routes.login,
@@ -34,6 +46,8 @@ export const flowOrder: string[] = [
   routes.surveyPriorities,
   routes.permissions,
   routes.done,
+  routes.results,
+  routes.tour,
   routes.insights,
   routes.annotations,
   routes.priorities,

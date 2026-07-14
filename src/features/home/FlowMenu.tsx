@@ -4,9 +4,10 @@ import { IconFeather } from '@/components/icons'
 
 const groups: { title: string; items: { label: string; to: string }[] }[] = [
   {
-    title: 'Onboarding',
+    title: 'Install & Onboarding',
     items: [
-      { label: 'N0 · Install', to: routes.install },
+      { label: 'N0 · Chrome Web Store', to: routes.install },
+      { label: 'New tab (pre-install)', to: routes.search },
       { label: 'N1 · Welcome', to: routes.welcome },
       { label: 'N2 · Member check', to: routes.memberCheck },
       { label: 'M1 · Log in', to: routes.login },
@@ -18,13 +19,22 @@ const groups: { title: string; items: { label: string; to: string }[] }[] = [
     ],
   },
   {
-    title: 'Browse & Decide',
+    title: 'Search & Browse',
     items: [
+      { label: 'New tab (onboarded)', to: `${routes.search}?ready=1` },
+      { label: 'Google results', to: routes.results },
+      { label: 'Amazon · first tooltip', to: routes.tour },
       { label: 'Product Insights', to: routes.insights },
       { label: 'Inline Annotations', to: routes.annotations },
-      { label: 'Priority Inference', to: routes.priorities },
+    ],
+  },
+  {
+    title: 'Decide & Share',
+    items: [
+      { label: 'Preference Inference', to: routes.priorities },
       { label: 'Decision Support', to: routes.decision },
-      { label: 'Collaboration', to: routes.collaborate },
+      { label: 'Share a list', to: routes.collaborate },
+      { label: 'Shared list', to: `${routes.collaborate}?stage=shared` },
       { label: 'Post-Purchase', to: routes.postPurchase },
       { label: 'Connie Chat', to: routes.chat },
     ],

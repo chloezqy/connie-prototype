@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
 import { FigmaFrame } from '@/layouts/FigmaFrame'
-import { CRLauncher } from '@/components/connie/CRLauncher'
 import { NaviRail } from '@/components/connie/NaviRail'
-import { routes } from '@/app/routes'
+import { ProductBackdrop } from '@/components/connie/RetailBackdrop'
+import { DimOverlay } from '@/components/connie/DimOverlay'
 import { cn } from '@/lib/cn'
+import { LOADING_MS, MAX_LOADING_MS } from '@/lib/timing'
 import { callConnieCached, peekConnieCache } from '@/api/connieClient'
 import { isInlineAnnotations, type Evidence, type InlineAnnotation } from '@/types/connie-contract'
 import { cleanEvidence } from '@/lib/sourceFilter'
@@ -13,58 +13,41 @@ import { usePreferences } from '@/store/usePreferences'
 
 /* ---------- Annotation asset paths (public/figma) ---------- */
 const asset = {
-  backdrop: '/figma/annot-backdrop.png',
-  check: '/figma/annot-check.svg',
   xcircle: '/figma/annot-xcircle.svg',
-  question: '/figma/annot-question.svg',
   link: '/figma/annot-link.svg',
   arrow: '/figma/annot-arrow.svg',
   x: '/figma/annot-x.svg',
   avatarCr: '/figma/annot-avatar-cr.png',
   avatarReddit: '/figma/annot-avatar-reddit.png',
   avatarInstagram: '/figma/annot-avatar-instagram.png',
-  naviChat: '/figma/annot-navi-chat.svg',
-  naviHeart: '/figma/annot-navi-heart.svg',
-  naviLine: '/figma/annot-navi-line.svg',
-  naviGear: '/figma/annot-navi-gear.svg',
-  naviQuestion: '/figma/annot-navi-question.svg',
 }
 
-/* ---------- State model — five variants of one inline-annotation experience ---------- */
-type StateKey = 'base' | 'verified-both' | 'verified-community' | 'misleading' | 'unverifiable'
+/* ---------- Geometry ---------- */
+const FRAME_W = 1440
+const FRAME_H = 900
+const CALLOUT_W = 520
+/** Roughly how tall each surface renders — used to flip it above a highlight low on the page. */
+const CALLOUT_H = 280
+const VERIFYING_H = 76
+/** A drag shorter than this is a click, not a selection. */
+const MIN_DRAG_PX = 40
 
-const STATE_ORDER: { key: StateKey; short: string }[] = [
-  { key: 'base', short: 'Base' },
-  { key: 'verified-both', short: 'CR + community' },
-  { key: 'verified-community', short: 'Community only' },
-  { key: 'misleading', short: 'Misleading' },
-  { key: 'unverifiable', short: 'Unable to verify' },
-]
+type Rect = { left: number; top: number; width: number; height: number }
 
-/* ---------- Retailer-page chrome (persists across all states) ---------- */
-
-/** A highlighted claim swatch drawn over the retailer page. */
-function Highlight({
-  left,
-  top,
-  width,
-  height = 21,
-  color,
-  opacity = 1,
-}: {
-  left: number
-  top: number
-  width: number
-  height?: number
-  color: string
-  opacity?: number
-}) {
-  return (
-    <div
-      className="absolute rounded-[4px]"
-      style={{ left, top, width, height, background: color, opacity }}
-    />
-  )
+/**
+ * Anchor a floating surface to the highlight it belongs to: directly below when there's room,
+ * flipped above when there isn't, always inside the frame.
+ *
+ * `h` is the surface's own height, so the small verifying card sits tight against the highlight
+ * instead of being positioned as if it were the (much taller) verdict callout.
+ */
+function anchorTo(r: Rect, h: number): CSSProperties {
+  const below = r.top + r.height + 14
+  const fitsBelow = below + h <= FRAME_H - 16
+  return {
+    left: Math.min(Math.max(r.left - 8, 16), FRAME_W - CALLOUT_W - 16),
+    top: fitsBelow ? below : Math.max(16, r.top - h - 14),
+  }
 }
 
 /* ---------- Connie annotation callout ---------- */
@@ -74,9 +57,7 @@ type Source = {
   name: string
   quote: string
   chip: string
-  /** Instagram avatar has no white ring in Figma. */
   ring?: boolean
-  /** Fixed 220px cards (CR/community pair) vs. flex-fill cards (community-only). */
   fixed?: boolean
 }
 
@@ -94,22 +75,15 @@ function SourceCard({ avatar, name, quote, chip, ring = true, fixed = true }: So
             <img
               alt=""
               src={avatar}
-              className={cn(
-                'size-[16px] rounded-full object-cover',
-                ring && 'border-[0.5px] border-white',
-              )}
+              className={cn('size-[16px] rounded-full object-cover', ring && 'border-[0.5px] border-white')}
             />
-            <p className="whitespace-nowrap text-[12px] font-semibold leading-[16px] text-fg-primary">
-              {name}
-            </p>
+            <p className="whitespace-nowrap text-[12px] font-semibold leading-[16px] text-fg-primary">{name}</p>
           </div>
           <p className="w-full text-[12px] font-normal leading-[17px] text-fg-primary">{quote}</p>
         </div>
         <div className="flex items-center gap-[4px] rounded-[80px] border-[0.5px] border-border-subtle bg-white py-[2px] pl-[8px] pr-[12px]">
           <img alt="" src={asset.link} className="size-[14px]" />
-          <p className="whitespace-nowrap text-[10px] leading-[20px] tracking-[0.1px] text-[#222]">
-            {chip}
-          </p>
+          <p className="whitespace-nowrap text-[10px] leading-[20px] tracking-[0.1px] text-[#222]">{chip}</p>
           <img alt="" src={asset.arrow} className="size-[12px]" />
         </div>
       </div>
@@ -124,8 +98,6 @@ function Callout({
   subtitle,
   children,
   onClose,
-  onMouseEnter,
-  onMouseLeave,
 }: {
   style: CSSProperties
   icon: string
@@ -133,17 +105,13 @@ function Callout({
   subtitle: string
   children?: ReactNode
   onClose: () => void
-  onMouseEnter?: () => void
-  onMouseLeave?: () => void
 }) {
   return (
     <div
-      onMouseEnter={onMouseEnter}
-      onMouseLeave={onMouseLeave}
-      className="absolute flex flex-col items-start gap-[12px] overflow-clip rounded-md border-[0.5px] border-[#c5c5c5] bg-bg-secondary p-[24px] shadow-panel"
-      style={{ width: 520, ...style }}
+      className="absolute z-20 flex flex-col items-start gap-[12px] overflow-clip rounded-md border-[0.5px] border-[#c5c5c5] bg-bg-secondary p-[24px] shadow-panel"
+      style={{ width: CALLOUT_W, ...style }}
     >
-      <div className="flex w-full flex-col items-start gap-[6px]">
+      <div className="flex w-full flex-col items-start gap-[6px] pr-[28px]">
         <div className="flex items-center gap-[6px]">
           <img alt="" src={icon} className="size-[20px]" />
           <p className="whitespace-nowrap text-title4 font-semibold text-fg-primary">{title}</p>
@@ -154,8 +122,7 @@ function Callout({
       <button
         aria-label="Close"
         onClick={onClose}
-        className="absolute block cursor-pointer"
-        style={{ left: 481.5, top: 21.5 }}
+        className="absolute right-[22px] top-[22px] block cursor-pointer"
       >
         <img alt="" src={asset.x} className="size-[18px]" />
       </button>
@@ -163,19 +130,11 @@ function Callout({
   )
 }
 
-/** The 8px-padded row that holds a pair of source cards. */
 function SourceRow({ children }: { children: ReactNode }) {
   return <div className="flex w-full items-start gap-[12px] rounded-[8px] p-[8px]">{children}</div>
 }
 
 /* ---------- Source content (Figma copy, verbatim) ---------- */
-const crPaddingQuote =
-  '"Padding was generous and well-distributed, supporting comfort across test conditions.”'
-const redditComfyQuote =
-  '"Genuinely the comfiest stroller we\'ve tried — zero fussing from my toddler..”'
-const redditComfyQuoteAlt =
-  '“Genuinely the comfiest stroller we\'ve tried — zero fussing from my toddler.”'
-const instagramQuote = '"Love it! My daughter doesn\'t even fuss on long walks anymore.'
 const crSeatQuote =
   '“Seat cushioning compressed quickly and offered little support during longer rides.”'
 const redditFussQuote = '"My daughter fusses to get out after one loop around the block.”'
@@ -196,7 +155,6 @@ const SOURCE_LABEL: Record<string, string> = {
   web: 'Web',
 }
 
-/** Renders a live annotation's evidence as source cards (falls back to nothing if empty). */
 function LiveSources({ evidence }: { evidence: Evidence[] }) {
   // Drop youtube + direct competitors (Wirecutter, BabyGearLab, ...) from displayed evidence.
   const shown = cleanEvidence(evidence)
@@ -217,7 +175,7 @@ function LiveSources({ evidence }: { evidence: Evidence[] }) {
   )
 }
 
-/* ---------- Verifying loader (yellow-green "C + sparkles") ---------- */
+/* ---------- Verifying loader ---------- */
 function Sparkle({ className, style }: { className?: string; style?: CSSProperties }) {
   return (
     <svg viewBox="0 0 24 24" fill="currentColor" className={className} style={style}>
@@ -226,14 +184,15 @@ function Sparkle({ className, style }: { className?: string; style?: CSSProperti
   )
 }
 
-/** Yellow-green "Connie is verifying" animation shown for ~5s before the callout appears. */
+/** Yellow-green "Connie is verifying" animation, shown while the claim is being checked.
+ *  The card itself is opaque — the motion lives in the sparkles and the dots. It used to carry
+ *  `animate-pulse`, which faded the whole card to 50% and let the page bleed through it. */
 function VerifyingCard({ style }: { style: CSSProperties }) {
   return (
     <div
-      className="absolute flex animate-pulse items-center gap-[14px] overflow-clip rounded-[16px] border-[0.5px] border-[#c5c5c5] bg-gradient-to-r from-[rgba(217,237,226,0.95)] to-[rgba(251,245,221,0.95)] px-[22px] py-[18px] shadow-panel"
+      className="absolute z-20 flex items-center gap-[14px] overflow-clip rounded-[16px] border-[0.5px] border-[#c5c5c5] bg-gradient-to-r from-[#d9ede2] to-[#fbf5dd] px-[22px] py-[18px] shadow-panel"
       style={{ width: 320, ...style }}
     >
-      {/* "C" mark with twinkling sparkles */}
       <div className="relative flex size-[40px] shrink-0 items-center justify-center rounded-[10px] bg-brand">
         <span className="text-[22px] font-semibold leading-none text-white">C</span>
         <Sparkle className="absolute -right-[7px] -top-[7px] size-[16px] animate-pulse text-[#bfd730]" />
@@ -261,74 +220,117 @@ function VerifyingCard({ style }: { style: CSSProperties }) {
   )
 }
 
-/* ---------- Exported screen ---------- */
-export function AnnotationsScreen() {
-  const [params, setParams] = useSearchParams()
-
-  // Intro tooltip — shown once when arriving from the Product Insights page, before the callout.
-  const [intro, setIntro] = useState(params.get('intro') === '1')
-  const dismissIntro = () => {
-    setIntro(false)
-    const next = new URLSearchParams(params)
-    next.delete('intro')
-    setParams(next, { replace: true })
-  }
-
-  // Hovering the highlighted claim runs a ~5s "verifying" animation, then reveals the callout.
-  //
-  // MERGE NOTE: Chloe's verify animation dismissed the callout the instant the cursor left the
-  // claim. But the callout contains clickable source links, so the cursor has to travel onto it —
-  // which cancelled it before it could be reached. Both behaviours are kept here: her phase
-  // machine drives the animation, and a 300ms grace period (plus hovering the callout itself,
-  // plus click-to-pin) keeps it reachable.
-  const [phase, setPhase] = useState<'idle' | 'loading' | 'result'>('idle')
-  const [pinned, setPinned] = useState(false)
-  const hoverTimer = useRef<number | null>(null) // loading → result
-  const closeTimer = useRef<number | null>(null) // grace period before dismissing
-  useEffect(
-    () => () => {
-      if (hoverTimer.current) window.clearTimeout(hoverTimer.current)
-      if (closeTimer.current) window.clearTimeout(closeTimer.current)
-    },
-    [],
+/* ---------- Connie's nudge ---------- */
+/** The "bing!" — Connie noticing there are claims on this page worth checking. */
+function HighlightNudge({ onDismiss }: { onDismiss: () => void }) {
+  return (
+    <div
+      className="absolute z-30 flex w-[330px] flex-col gap-[10px] rounded-[16px] border-[0.5px] border-border-subtle bg-bg-secondary p-[18px] shadow-panel"
+      style={{ left: 122, bottom: 44 }}
+    >
+      <div className="flex items-center gap-[8px]">
+        <img src="/figma/C.png" alt="" className="size-[22px] object-contain" />
+        <p className="flex-1 text-[14px] font-semibold leading-[20px] text-fg-primary">
+          Not sure about a claim here?
+        </p>
+        <button aria-label="Dismiss" onClick={onDismiss} className="size-[14px] shrink-0">
+          <img src={asset.x} alt="" className="size-full" />
+        </button>
+      </div>
+      <p className="text-[14px] leading-[20px] text-fg-secondary">
+        Highlight any line on this page and I'll check it against CR's lab tests and what other
+        parents actually say.
+      </p>
+      {/* Tail pointing down-left at the "C". */}
+      <div
+        className="absolute"
+        style={{
+          left: -9,
+          bottom: 20,
+          width: 0,
+          height: 0,
+          borderTop: '9px solid transparent',
+          borderBottom: '9px solid transparent',
+          borderRight: '9px solid var(--color-bg-secondary)',
+        }}
+      />
+    </div>
   )
-  /** Cancel a pending dismissal — the cursor came back (onto the claim or the callout). */
-  const keepOpen = () => {
-    if (closeTimer.current) {
-      window.clearTimeout(closeTimer.current)
-      closeTimer.current = null
-    }
+}
+
+/* ---------- Exported screen ---------- */
+/**
+ * The product detail page. It opens as the pure retailer page — no highlights, nothing drawn on
+ * it. Connie nudges from the corner; the shopper drags across any claim; that selection is what
+ * gets verified. Connie only ever checks what you point at.
+ */
+export function AnnotationsScreen() {
+  type Phase = 'idle' | 'loading' | 'result'
+  const [phase, setPhase] = useState<Phase>('idle')
+  const [nudge, setNudge] = useState(false)
+  /** The live drag, and the committed selection it becomes. */
+  const [drag, setDrag] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null)
+  const [selection, setSelection] = useState<Rect | null>(null)
+  const surfaceRef = useRef<HTMLDivElement>(null)
+
+  /* --- Connie's "bing" a beat after landing on the page --- */
+  useEffect(() => {
+    const t = window.setTimeout(() => setNudge(true), 900)
+    return () => window.clearTimeout(t)
+  }, [])
+
+  /* --- Drag to select --- */
+  const pointFromEvent = (e: React.PointerEvent) => {
+    const box = surfaceRef.current?.getBoundingClientRect()
+    if (!box) return { x: 0, y: 0 }
+    // The frame is CSS-scaled to fit the viewport, so map back into frame coordinates.
+    const scale = box.width / FRAME_W
+    return { x: (e.clientX - box.left) / scale, y: (e.clientY - box.top) / scale }
   }
-  // The 2s is a FLOOR, not the resolve condition. `loading` only becomes `result` once the
-  // annotation fetch has actually settled (see the promotion effect below) — otherwise the callout
-  // opens on a timer and renders the baked copy, which is indistinguishable from a real verdict.
-  const [verifyMinDone, setVerifyMinDone] = useState(false)
-  const startVerify = () => {
-    keepOpen()
-    if (phase === 'result') return // already resolved — don't replay the animation
-    if (hoverTimer.current) window.clearTimeout(hoverTimer.current)
+  const onPointerDown = (e: React.PointerEvent) => {
+    if (phase !== 'idle') return
+    const { x, y } = pointFromEvent(e)
+    setDrag({ x0: x, y0: y, x1: x, y1: y })
+    e.currentTarget.setPointerCapture(e.pointerId)
+  }
+  const onPointerMove = (e: React.PointerEvent) => {
+    if (!drag) return
+    const { x, y } = pointFromEvent(e)
+    setDrag((d) => (d ? { ...d, x1: x, y1: y } : d))
+  }
+  const onPointerUp = () => {
+    if (!drag) return
+    const rect = dragRect(drag)
+    setDrag(null)
+    // A short drag is a click, not a selection — leave the page alone.
+    if (rect.width < MIN_DRAG_PX) return
+    setNudge(false)
+    setSelection(rect)
     setVerifyMinDone(false)
     setPhase('loading')
-    hoverTimer.current = window.setTimeout(() => setVerifyMinDone(true), 2000)
   }
-  /** Cursor left; dismiss after a grace period unless it comes back or the callout is pinned. */
-  const cancelVerifySoon = () => {
-    if (pinned) return
-    if (closeTimer.current) window.clearTimeout(closeTimer.current)
-    closeTimer.current = window.setTimeout(() => {
-      if (hoverTimer.current) window.clearTimeout(hoverTimer.current)
-      hoverTimer.current = null
-      setPhase('idle')
-    }, 300)
+
+  /** The drag as a text-selection-shaped rect: at least one line tall. */
+  const dragRect = (d: { x0: number; y0: number; x1: number; y1: number }): Rect => {
+    const left = Math.min(d.x0, d.x1)
+    const top = Math.min(d.y0, d.y1)
+    const width = Math.abs(d.x1 - d.x0)
+    const height = Math.max(Math.abs(d.y1 - d.y0), 22)
+    return { left, top: top - 3, width, height }
   }
-  /** Explicit dismissal (the X) — drop the pin and reset immediately. */
-  const dismissVerify = () => {
-    keepOpen()
-    if (hoverTimer.current) window.clearTimeout(hoverTimer.current)
-    hoverTimer.current = null
-    setPinned(false)
-    setVerifyMinDone(false)
+
+  /* --- Verify: LOADING_MS floor + the real fetch, whichever is slower --- */
+  const [verifyMinDone, setVerifyMinDone] = useState(false)
+  useEffect(() => {
+    if (phase !== 'loading') return
+    const t = window.setTimeout(() => setVerifyMinDone(true), LOADING_MS)
+    return () => window.clearTimeout(t)
+  }, [phase])
+
+  const dismiss = () => {
     setPhase('idle')
+    setSelection(null)
+    setVerifyMinDone(false)
   }
 
   // Fetch live inline annotations once; index them by verdict so each callout can use its own.
@@ -356,7 +358,7 @@ export function AnnotationsScreen() {
     // Ceiling: a hung backend must not trap the user in a permanent "Verifying…" state. Keep this
     // comfortably longer than a real call (this one does live web searches) — if it fires
     // mid-flight, the baked callout appears while the real verdict is still coming.
-    const cap = window.setTimeout(() => setAnnSettled(true), 45000)
+    const cap = window.setTimeout(() => setAnnSettled(true), MAX_LOADING_MS)
     callConnieCached(ANN_REQUEST)
       .then((r) => {
         if (isInlineAnnotations(r)) {
@@ -389,96 +391,67 @@ export function AnnotationsScreen() {
     if (phase === 'loading' && verifyMinDone && annSettled) setPhase('result')
   }, [phase, verifyMinDone, annSettled])
 
-  /* ---- Intro coach mark (arrives from Product Insights via ?intro=1) ---- */
-  if (intro) {
-    return (
-      <FigmaFrame backdrop={asset.backdrop} backdropOpacity={0.4}>
-        {/* Highlighted claim the user "pointed to" */}
-        <div
-          className="absolute rounded-[4px]"
-          style={{ left: 597, top: 569, width: 248, height: 21, opacity: 0.3, background: '#ae0d00' }}
-        />
-        <div
-          className="absolute rounded-[4px]"
-          style={{ left: 579, top: 565, width: 276, height: 30, border: '2.5px solid #050500' }}
-        />
-
-        {/* Dark tooltip bubble + arrow pointing right toward the highlight */}
-        <div className="absolute flex items-center" style={{ left: 154, top: 480 }}>
-          <div
-            className="flex w-[397px] flex-col items-start gap-[18px] overflow-clip rounded-[16px] bg-fg-primary p-[28px]"
-            style={{ boxShadow: '0px 10px 28px 0px rgba(0,0,0,0.22)' }}
-          >
-            <div className="flex items-start rounded-[999px] bg-bg-primary px-[12px] py-[5px]">
-              <p className="whitespace-nowrap text-[12px] font-semibold leading-[16px] text-fg-primary">
-                INLINE ANNOTATION
-              </p>
-            </div>
-            <p className="text-[16px] font-normal leading-[24px] text-fg-inverse">
-              Highlight anything you're unsure about. Connie only checks what you point to and searches
-              CR's tests and community live, so the colored flags appear right after you highlight.
-            </p>
-          </div>
-          <div
-            style={{
-              width: 0,
-              height: 0,
-              borderTop: '16px solid transparent',
-              borderBottom: '16px solid transparent',
-              borderLeft: '14px solid #050500',
-            }}
-          />
-        </div>
-
-        {/* Got it pill */}
-        <div
-          className="absolute flex w-[143px] items-center overflow-clip rounded-[999px] bg-white px-[22px] py-[12px]"
-          style={{ left: 647, top: 794, boxShadow: '0px 8px 24px 0px rgba(0,0,0,0.14)' }}
-        >
-          <button
-            onClick={dismissIntro}
-            className="flex h-[48px] flex-1 items-center justify-center rounded-[48px] bg-brand text-[16px] font-semibold text-fg-inverse"
-          >
-            Got it ✓
-          </button>
-        </div>
-
-        <NaviRail />
-      </FigmaFrame>
-    )
-  }
+  const liveRect = drag ? dragRect(drag) : null
+  const shownRect = liveRect ?? selection
+  /** Neutral marker while selecting/verifying; the verdict's own colour once it lands. */
+  const markColor = phase === 'result' ? '#ae0d00' : '#ffd500'
 
   return (
-    <FigmaFrame backdrop={asset.backdrop} backdropOpacity={phase === 'idle' ? 1 : 0.7}>
-      {/* Highlighted claim on the page — hovering it runs the verify animation then reveals the
-          callout; moving off it returns to the base screen. No black border in either state. */}
+    <FigmaFrame>
+      {/* The retailer page at full colour, with nothing drawn on it. */}
+      <ProductBackdrop />
+
+      {/* Selection surface — the whole page is highlightable. */}
       <div
-        className="absolute cursor-pointer"
-        style={{ left: 579, top: 563, width: 276, height: 34 }}
-        onMouseEnter={startVerify}
-        onMouseLeave={cancelVerifySoon}
-        // Click to pin the callout open, so the source links stay reachable without hovering.
-        onClick={() => setPinned((p) => !p)}
-      >
+        ref={surfaceRef}
+        className={cn('absolute inset-0', phase === 'idle' && 'cursor-text')}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={() => setDrag(null)}
+      />
+
+      {/* The shopper's highlight, drawn exactly where they dragged. */}
+      {shownRect && (
         <div
-          className="absolute rounded-[4px]"
-          style={{ left: 18, top: 6, width: 248, height: 21, background: '#ae0d00', opacity: 0.3 }}
+          className="pointer-events-none absolute rounded-[3px] transition-colors"
+          style={{
+            left: shownRect.left,
+            top: shownRect.top,
+            width: shownRect.width,
+            height: shownRect.height,
+            background: markColor,
+            opacity: 0.32,
+          }}
         />
-      </div>
+      )}
 
-      {/* Verifying — yellow-green "C + sparkles" loader (~5s) before the result */}
-      {phase === 'loading' && <VerifyingCard style={{ left: 802, top: 598 }} />}
+      {/* 10% scrim under the verdict — the page stays full colour. */}
+      {phase === 'result' && <DimOverlay onClick={dismiss} />}
+      {/* The highlight has to stay legible through the scrim, so redraw it on top. */}
+      {phase === 'result' && shownRect && (
+        <div
+          className="pointer-events-none absolute z-10 rounded-[3px]"
+          style={{
+            left: shownRect.left,
+            top: shownRect.top,
+            width: shownRect.width,
+            height: shownRect.height,
+            background: markColor,
+            opacity: 0.32,
+          }}
+        />
+      )}
 
-      {/* Misleading — CR + community (1052:2717) */}
-      {phase === 'result' && (
+      {phase === 'loading' && selection && <VerifyingCard style={anchorTo(selection, VERIFYING_H)} />}
+
+      {phase === 'result' && selection && (
         <Callout
-          style={{ left: 802, top: 598 }}
+          style={anchorTo(selection, CALLOUT_H)}
           icon={asset.xcircle}
           title={annMis?.verdict_label ?? 'Misleading claim'}
           subtitle={annMis?.explanation ?? "Doesn't match what our testers and real users are saying."}
-          onClose={dismissVerify}
-          onMouseEnter={keepOpen}
-          onMouseLeave={cancelVerifySoon}
+          onClose={dismiss}
         >
           {annMis ? (
             <LiveSources evidence={annMis.evidence} />
@@ -489,6 +462,7 @@ export function AnnotationsScreen() {
                 name="Consumer Reports "
                 quote={crSeatQuote}
                 chip="Baby Trend Stroller Review"
+                fixed={false}
               />
               {connected.includes('Reddit') && (
                 <SourceCard
@@ -496,6 +470,7 @@ export function AnnotationsScreen() {
                   name="Reddit"
                   quote={redditFussQuote}
                   chip="Best Strollers: Thread"
+                  fixed={false}
                 />
               )}
             </SourceRow>
@@ -503,7 +478,9 @@ export function AnnotationsScreen() {
         </Callout>
       )}
 
-      <NaviRail />
+      {nudge && phase === 'idle' && <HighlightNudge onDismiss={() => setNudge(false)} />}
+
+      <NaviRail notify={nudge && phase === 'idle'} />
     </FigmaFrame>
   )
 }

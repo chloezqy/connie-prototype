@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode, type CSSProperties } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { FigmaFrame } from '@/layouts/FigmaFrame'
-import { RetailBackdrop } from '@/components/connie/RetailBackdrop'
 import { routes } from '@/app/routes'
 import { callConnieCached, peekConnieCache } from '@/api/connieClient'
 import {
@@ -12,8 +11,20 @@ import {
 } from '@/types/connie-contract'
 import { usePreferences, preferencesToPriorities } from '@/store/usePreferences'
 import { cleanEvidence } from '@/lib/sourceFilter'
+import { LOADING_MS, MAX_LOADING_MS } from '@/lib/timing'
 import { communityPosts, type CommunitySource } from '@/mocks/communityPosts'
 import { NaviRail } from '@/components/connie/NaviRail'
+import { ProductBackdrop } from '@/components/connie/RetailBackdrop'
+import { DimOverlay } from '@/components/connie/DimOverlay'
+import {
+  IconSafety,
+  IconCompass,
+  IconFold,
+  IconComfort,
+  IconWeight,
+  IconDurability,
+  IconCaretDown,
+} from '@/components/icons'
 
 /* ------------------------------------------------------------------ *
  * Decision Support — faithful reproduction of Figma frames
@@ -45,6 +56,11 @@ const asset = {
   share: `${A}share.svg`,
   trash: `${A}trash.svg`,
   whyCheck: `${A}whyfits-check.svg`,
+  // Five distinct product photos. The first three are the strollers actually on the retail page,
+  // cropped from that same screenshot — so a card's photo is the product it's describing.
+  prodAero: `${A}prod-aero.png`,
+  prodBabyTrend: `${A}prod-babytrend.png`,
+  prodGraco: `${A}prod-graco.png`,
   prodVista: `${A}prod-vista.png`,
   prodCity: `${A}prod-citymini.png`,
   avCr: `${A}av-cr.png`,
@@ -126,53 +142,91 @@ function PanelHeader({
 }
 
 /* -------------------------------------------------------- Selection header */
+/**
+ * Select-all + the actions that operate on a selection.
+ *
+ * Share and Delete only exist once something is actually selected — they're verbs that need an
+ * object, and showing them against an empty selection offers an action that can't do anything.
+ */
 function SelectionHeader({
-  expanded,
+  anySelected,
   allChecked,
   toggleAll,
   onShare,
 }: {
-  expanded: boolean
+  anySelected: boolean
   allChecked: boolean
   toggleAll: () => void
   onShare: () => void
 }) {
   return (
-    <div className="flex w-full shrink-0 items-center gap-[8px] rounded-[8px] bg-bg-tertiary pr-[8px]">
+    <div className="flex h-[28px] w-full shrink-0 items-center gap-[8px] pr-[4px]">
       <button aria-label="Select all" onClick={toggleAll} className="flex size-[24px] items-center justify-center">
         <CheckBox checked={allChecked} />
       </button>
       <div className="flex flex-1 flex-col">
         <p className="text-[14px] leading-[20px] text-fg-primary">Select All</p>
       </div>
-      {expanded ? (
-        <div className="flex items-start gap-[16px]">
+      {anySelected && (
+        <div className="flex items-center gap-[16px]">
           <button aria-label="Share" onClick={onShare} className="flex items-center gap-[6px]">
             <img src={asset.share} alt="" className="h-[15.75px] w-[12px]" />
-            <span className="text-[14px] leading-[20px] text-fg-secondary">SHARE</span>
+            <span className="text-[13px] font-semibold leading-[18px] text-fg-secondary">SHARE</span>
           </button>
-          <button className="flex items-center gap-[6px]">
+          <button aria-label="Delete" className="flex items-center gap-[6px]">
             <img src={asset.trash} alt="" className="h-[13.5px] w-[12px]" />
-            <span className="text-[14px] leading-[20px] text-fg-secondary">DELETE</span>
+            <span className="text-[13px] font-semibold leading-[18px] text-fg-secondary">DELETE</span>
           </button>
         </div>
-      ) : (
-        <>
-          <button aria-label="Share" onClick={onShare} className="size-[18px]">
-            <img src={asset.share} alt="" className="size-full" />
-          </button>
-          <button aria-label="Delete" className="flex h-[26px] w-[25px] items-center justify-center rounded-full">
-            <img src={asset.trash} alt="" className="h-[13.5px] w-[14px]" />
-          </button>
-        </>
       )}
+    </div>
+  )
+}
+
+/* ------------------------------------------------------------ Retailer mark */
+const RETAILER_STYLE: Record<string, { bg: string; fg: string; glyph: string }> = {
+  AMAZON: { bg: '#ff9900', fg: '#111', glyph: 'a' },
+  WALMART: { bg: '#0071ce', fg: '#fff', glyph: 'W' },
+  TARGET: { bg: '#cc0000', fg: '#fff', glyph: '◎' },
+  MOCKINGBIRD: { bg: '#2f3a2f', fg: '#fff', glyph: 'M' },
+}
+
+/** The retailer's logo chip, sat next to the price. */
+function RetailerMark({ retailer }: { retailer: string }) {
+  const s = RETAILER_STYLE[retailer.toUpperCase()] ?? { bg: '#77767b', fg: '#fff', glyph: retailer.charAt(0) }
+  return (
+    <span
+      className="flex size-[16px] shrink-0 items-center justify-center rounded-full text-[9px] font-bold leading-none"
+      style={{ background: s.bg, color: s.fg }}
+    >
+      {s.glyph}
+    </span>
+  )
+}
+
+/** Price + a hoverable retailer chip. Hovering it opens the compare-prices popover. */
+function PriceRow({ card, onCompareHover }: { card: Card; onCompareHover?: (h: boolean) => void }) {
+  const retailer = card.at.replace(/^AT\s+/i, '')
+  if (!retailer) return <span className="text-[14px] leading-[20px] text-fg-primary">{card.price}</span>
+  return (
+    <div className="flex items-center gap-[9px]">
+      <span className="text-[14px] leading-[20px] text-fg-primary">{card.price}</span>
+      <button
+        onMouseEnter={() => onCompareHover?.(true)}
+        onMouseLeave={() => onCompareHover?.(false)}
+        className="flex cursor-pointer items-center gap-[6px] rounded-[6px] bg-bg-tertiary px-[8px] py-[4px] transition-colors hover:bg-border-subtle"
+      >
+        <RetailerMark retailer={retailer} />
+        <span className="whitespace-nowrap text-[13px] leading-[18px] text-fg-secondary">{retailer}</span>
+        <IconCaretDown size={11} className="text-fg-secondary" />
+      </button>
     </div>
   )
 }
 
 /* -------------------------------------------------------------- Card data */
 type Chip = { img: string; label: string }
-type Card = {
+export type Card = {
   id: string
   img: string
   rank: string
@@ -186,18 +240,23 @@ type Card = {
   primaryBtn: boolean
 }
 
-const cards: Card[] = [
+/**
+ * The baked roster — a FAILURE FALLBACK, not a loading state (the shimmer covers the wait).
+ * It leads with the three strollers actually on the retail page, so even the fallback describes
+ * products the shopper can see. Every card gets its own photo.
+ */
+export const cards: Card[] = [
   {
-    id: 'vista',
-    img: asset.prodVista,
+    id: 'babytrend',
+    img: asset.prodBabyTrend,
     rank: '#1 BEST MATCH',
     rankBrand: true,
-    title: 'UppaBaby Vista V2',
-    price: '$999.00',
+    title: 'Baby Trend Passport Switch 6-in-1',
+    price: '$199.99',
     at: 'AT AMAZON',
-    why: 'Matches your high-priority for all-terrain stability. The dual-action suspension system is rated top-tier for gravel and uneven paths.',
+    why: 'Matches your priority on easy fold and everyday reliability. CR scored it top-tier for maneuverability and safety at a fraction of the price of the premium field.',
     whyLong:
-      'Matches your high-priority for all-terrain stability. The dual-action suspension system is rated top-tier for gravel and uneven paths. High durability ensures long-term value.',
+      'Matches your priority on easy fold and everyday reliability. CR scored it top-tier for maneuverability and safety at a fraction of the price of the premium field. High durability ensures long-term value.',
     chips: [
       { img: asset.avCr, label: 'CR 2024 Lab Results' },
       { img: asset.avReddit, label: 'Reddit Community' },
@@ -205,9 +264,23 @@ const cards: Card[] = [
     primaryBtn: true,
   },
   {
+    id: 'vista',
+    img: asset.prodVista,
+    rank: '#2 RUNNER UP',
+    rankBrand: false,
+    title: 'UppaBaby Vista V2',
+    price: '$999.00',
+    at: 'AT AMAZON',
+    why: 'The strongest all-terrain performer we tested — dual-action suspension rated top-tier for gravel and uneven paths. Heavy for stairs.',
+    whyLong:
+      'The strongest all-terrain performer we tested — dual-action suspension rated top-tier for gravel and uneven paths. Heavy for stairs, which counts against your walk-up.',
+    chips: [{ img: asset.avCr, label: 'CR 2024 Lab Results' }],
+    primaryBtn: false,
+  },
+  {
     id: 'city',
     img: asset.prodCity,
-    rank: '#2 RUNNER UP',
+    rank: '#3 LIGHTEST',
     rankBrand: false,
     title: 'Baby Jogger City Mini GT2',
     price: '$399.99',
@@ -219,48 +292,31 @@ const cards: Card[] = [
     primaryBtn: false,
   },
   {
-    id: 'lite3',
-    img: asset.prodCity,
-    rank: '#3 BUDGET PICK',
+    id: 'graco',
+    img: asset.prodGraco,
+    rank: 'NOT RECOMMENDED',
     rankBrand: false,
-    title: 'GB Pockit Lite 3',
-    price: '$199.00',
-    at: 'AT TARGET',
-    why: 'The lightest option on your list — great for travel, though CR flags it as not recommended for daily rough-terrain use.',
-    whyLong:
-      'The lightest option on your list — great for travel, though CR flags it as not recommended for daily rough-terrain use. Best kept as a secondary stroller.',
-    chips: [{ img: asset.avReddit, label: 'Travel Thread' }],
-    primaryBtn: false,
-  },
-  {
-    id: 'mockingbird',
-    img: asset.prodVista,
-    rank: '#4 VALUE',
-    rankBrand: false,
-    title: 'Mockingbird Single-to-Double',
-    price: '$650.00',
-    at: 'AT MOCKINGBIRD',
-    why: 'Strong all-around value with an expandable frame. Parents praise the ride quality for the price.',
-    whyLong:
-      'Strong all-around value with an expandable frame. Parents praise the ride quality for the price, and it converts to a double later.',
-    chips: [
-      { img: asset.avCr, label: 'CR 2024 Lab Results' },
-      { img: asset.avReddit, label: 'Reddit Community' },
-    ],
-    primaryBtn: false,
-  },
-  {
-    id: 'cruz',
-    img: asset.prodVista,
-    rank: '#5 COMPACT',
-    rankBrand: false,
-    title: 'UppaBaby Cruz V2',
-    price: '$699.00',
+    title: 'Graco Ready2Grow 2.0 Double Stroller',
+    price: '$299.00',
     at: 'AT AMAZON',
-    why: 'A lighter, single-seat sibling to the Vista with the same trusted build — a good fit for smaller trunks.',
+    why: 'Only worth it if you need two seats. CR scored it 58/100 — a wide turning radius and a bulky fold make it a poor fit for a walk-up.',
     whyLong:
-      'A lighter, single-seat sibling to the Vista with the same trusted build — a good fit for smaller trunks and city living.',
+      'Only worth it if you need two seats. CR scored it 58/100 — a wide turning radius and a bulky fold make it a poor fit for a walk-up and public transit.',
     chips: [{ img: asset.avCr, label: 'CR 2024 Lab Results' }],
+    primaryBtn: false,
+  },
+  {
+    id: 'aero',
+    img: asset.prodAero,
+    rank: 'NOT RECOMMENDED',
+    rankBrand: false,
+    title: 'Dream On Me Aero Travel Umbrella',
+    price: '$33.99',
+    at: 'AT AMAZON',
+    why: "The cheapest option on the shelf, and it shows: CR scored it 54/100 with low marks for ride comfort and durability.",
+    whyLong:
+      "The cheapest option on the shelf, and it shows: CR scored it 54/100 with low marks for ride comfort and durability. Fine as a spare; not as your only stroller.",
+    chips: [{ img: asset.avReddit, label: 'Reddit Community' }],
     primaryBtn: false,
   },
 ]
@@ -309,21 +365,31 @@ function RankingShimmer({ count = 3 }: { count?: number }) {
 }
 
 /* ----- map a live decision_support payload -> the screen's Card[] ----- */
-function productImage(name: string): string {
+/**
+ * A product's photo. The three strollers on the retail page have their own real shots (cropped
+ * from that page); anything else the agent surfaces falls back to a generic stroller photo, and
+ * alternates so a live list never shows the same picture five times.
+ */
+const FALLBACK_IMAGES = [asset.prodVista, asset.prodCity]
+function productImage(name: string, index = 0): string {
   const n = name.toLowerCase()
-  if (n.includes('city mini')) return asset.prodCity
-  return asset.prodVista // only two product photos exist; default to the Vista shot
+  if (n.includes('baby trend') || n.includes('passport')) return asset.prodBabyTrend
+  if (n.includes('graco') || n.includes('ready2grow')) return asset.prodGraco
+  if (n.includes('dream on me') || n.includes('aero')) return asset.prodAero
+  if (n.includes('city mini') || n.includes('gt2')) return asset.prodCity
+  if (n.includes('vista') || n.includes('uppababy')) return asset.prodVista
+  return FALLBACK_IMAGES[index % FALLBACK_IMAGES.length]
 }
 
 function productsToCards(payload: DecisionSupportPayload): Card[] {
-  return payload.products.map((p) => {
+  return payload.products.map((p, i) => {
     const badges = p.evidence_badges ?? []
     const why =
       p.recommendation_rationale ??
       `${p.specs.fold} fold · ${p.specs.weight} · ${p.specs.terrain}`
     return {
       id: p.product_name.toLowerCase().replace(/[^a-z0-9]+/g, '-') || `rank-${p.rank}`,
-      img: productImage(p.product_name),
+      img: productImage(p.product_name, i),
       rank: p.rank_label,
       rankBrand: p.rank === 1,
       title: p.product_name,
@@ -383,26 +449,37 @@ function SourceChip({ chip }: { chip: Chip }) {
 }
 
 /* ---------------------------------------------------------- Compact card */
-function CompactCard({
+/**
+ * The saved-list card. Exported, because the shared list in the collaboration flow shows the
+ * *same* list — a shopper who shares their picks should see exactly the cards they just chose,
+ * not a second card design that happens to describe the same products.
+ *
+ * `selectable={false}` drops the checkbox for read-only contexts (the shared list).
+ */
+export function CompactCard({
   card,
-  checked,
+  checked = false,
   onCheck,
   onReview,
   onCompareHover,
+  selectable = true,
   children,
 }: {
   card: Card
-  checked: boolean
-  onCheck: () => void
+  checked?: boolean
+  onCheck?: () => void
   onReview?: () => void
   onCompareHover?: (hovering: boolean) => void
+  selectable?: boolean
   children?: ReactNode
 }) {
   return (
     <div className="relative flex w-full items-start gap-[8px]">
-      <div className="flex w-[24px] shrink-0 flex-col items-center pt-[47px]">
-        <CheckBox checked={checked} onClick={onCheck} />
-      </div>
+      {selectable && (
+        <div className="flex w-[24px] shrink-0 flex-col items-center pt-[47px]">
+          <CheckBox checked={checked} onClick={onCheck} />
+        </div>
+      )}
       <div className="flex min-w-px flex-1 flex-col gap-[16px] overflow-clip rounded-[8px] border border-border-subtle bg-bg-primary p-[17px] shadow-[0px_2px_8px_0px_rgba(0,0,0,0.04)]">
         <div className="flex items-start gap-[16px]">
           <div className="flex size-[80px] shrink-0 items-center justify-center overflow-clip rounded-[8px] bg-bg-tertiary">
@@ -425,16 +502,7 @@ function CompactCard({
               </div>
             </div>
             <p className="text-[14px] font-semibold leading-[20px] text-fg-primary">{card.title}</p>
-            <div className="flex items-center gap-[9px]">
-              <span className="text-[14px] leading-[20px] text-fg-primary">{card.price}</span>
-              <div
-                className="flex cursor-pointer rounded-[4px] bg-border-subtle px-[8px] py-[4px]"
-                onMouseEnter={() => onCompareHover?.(true)}
-                onMouseLeave={() => onCompareHover?.(false)}
-              >
-                <span className="whitespace-nowrap text-[14px] leading-[20px] text-fg-secondary">{card.at}</span>
-              </div>
-            </div>
+            <PriceRow card={card} onCompareHover={onCompareHover} />
           </div>
         </div>
 
@@ -446,13 +514,11 @@ function CompactCard({
           ))}
         </div>
 
+        {/* Every card's action is the same action, so every card's button looks the same. The
+            ranking is carried by the rank badge, not by making four of five buttons look inert. */}
         <button
           onClick={onReview}
-          className={`w-full rounded-[8px] py-[10px] text-center text-[14px] leading-[20px] ${
-            card.primaryBtn
-              ? 'bg-brand text-fg-inverse'
-              : 'border border-border-subtle bg-border-subtle text-fg-brand'
-          }`}
+          className="w-full rounded-[8px] bg-brand py-[10px] text-center text-[14px] font-semibold leading-[20px] text-fg-inverse"
         >
           View Full Review
         </button>
@@ -713,23 +779,40 @@ function ExpandedVerdictBanner({ product, verdict }: { product?: Card; verdict?:
 }
 
 /* --------------------------------------------------- Expanded card + metrics */
-type Metric = { title: string; text: string; icon: string; dim?: boolean }
+type MetricIcon = (p: { size?: number; className?: string }) => JSX.Element
+type Metric = { title: string; text: string; Icon: MetricIcon }
+
+/** All six things CR scores a stroller on — the full picture, not a sample of three. */
 const metrics: Metric[] = [
   {
-    title: 'Top Rated',
-    text: 'No bumps in the road here. CR and parents agree: this one earns its reputation.',
-    icon: `${I}toprated.svg`,
+    title: 'Safety',
+    text: 'Five-point harness and a parking brake that held on every incline our testers ran.',
+    Icon: IconSafety,
   },
   {
-    title: 'City Certified',
-    text: 'Built for the urban jungle. Handles sidewalks and curbs effortlessly and folds compactly.',
-    icon: `${I}city.svg`,
+    title: 'Maneuverability',
+    text: 'Handles sidewalks and curbs effortlessly; tight turning radius in our urban course.',
+    Icon: IconCompass,
   },
   {
-    title: 'Built to Last',
+    title: 'Ease of fold',
+    text: 'Snaps open and folds shut in seconds — one hand, no wrestling.',
+    Icon: IconFold,
+  },
+  {
+    title: 'Comfort',
+    text: 'Plush seat, smooth suspension. Fewer complaints from the passenger seat.',
+    Icon: IconComfort,
+  },
+  {
+    title: 'Weight',
+    text: "Middle of the pack — manageable day to day, but you'll feel it on stairs.",
+    Icon: IconWeight,
+  },
+  {
+    title: 'Durability',
     text: 'High-quality fabrics and wheels that make resale easy and hand-me-downs an option.',
-    icon: `${I}sketch.svg`,
-    dim: true,
+    Icon: IconDurability,
   },
 ]
 
@@ -755,21 +838,19 @@ function MetricSources() {
 
 function MetricCard({ m }: { m: Metric }) {
   return (
-    <div className="flex items-center gap-[16px] overflow-clip rounded-[8px] border border-border-subtle bg-bg-primary p-[17px]">
-      <div
-        className={`flex size-[45px] shrink-0 items-center justify-center rounded-[22.5px] ${m.dim ? 'opacity-80' : ''}`}
-        style={{ background: 'linear-gradient(180deg, #77798d 0%, #b1b3b9 100%)' }}
-      >
-        <img src={m.icon} alt="" className="size-[24px]" style={{ filter: 'brightness(0) invert(1)' }} />
+    <div className="flex items-start gap-[14px] overflow-clip rounded-[8px] border border-border-subtle bg-bg-primary p-[16px]">
+      <div className="flex size-[40px] shrink-0 items-center justify-center rounded-full bg-bg-tertiary">
+        <m.Icon size={20} className="text-fg-primary" />
       </div>
-      <div className="flex flex-1 flex-col gap-[4px]">
+      <div className="flex min-w-0 flex-1 flex-col gap-[4px]">
         <div className="flex items-center gap-[8px]">
-          <span className="whitespace-nowrap text-[14px] leading-[20px] text-fg-primary">{m.title}</span>
+          <span className="whitespace-nowrap text-[14px] font-semibold leading-[20px] text-fg-primary">
+            {m.title}
+          </span>
           <MetricSources />
         </div>
         <p className="text-[14px] leading-[20px] text-fg-secondary">{m.text}</p>
       </div>
-      <img src={`${I}caret.svg`} alt="" className="h-[7.4px] w-[12px] -rotate-90 shrink-0" />
     </div>
   )
 }
@@ -812,11 +893,8 @@ function ExpandedCard({
               <div className="flex w-fit rounded-[8px] bg-bg-brand-muted px-[10px] py-[5px]">
                 <span className="whitespace-nowrap text-[14px] leading-[20px] text-fg-brand">{card.rank}</span>
               </div>
-              <p className="text-[14px] leading-[20px] text-fg-primary">{card.title}</p>
-              <span className="text-[14px] leading-[20px] text-fg-primary">{card.price}</span>
-              <div className="flex w-fit rounded-[8px] bg-border-subtle px-[10px] py-[5px]">
-                <span className="whitespace-nowrap text-[14px] leading-[20px] text-fg-secondary">{card.at}</span>
-              </div>
+              <p className="text-[14px] font-semibold leading-[20px] text-fg-primary">{card.title}</p>
+              <PriceRow card={card} />
             </div>
             <WhyThisFits text={card.whyLong} pad={17} />
             <div className="flex flex-wrap gap-[8px]">
@@ -827,17 +905,9 @@ function ExpandedCard({
           </div>
         </div>
 
-        {/* metrics toggle row */}
-        <div className="flex items-center justify-between">
-          <span className="whitespace-nowrap text-[14px] leading-[20px] text-fg-secondary">LAB &amp; USER METRICS</span>
-          <button onClick={onToggleDetails} className="flex items-center gap-[6px]">
-            <span className="whitespace-nowrap text-[14px] leading-[20px] text-fg-secondary">
-              {showDetails ? 'Hide Details' : 'Show Details'}
-            </span>
-            <img src={`${I}caret.svg`} alt="" className={`h-[5.55px] w-[9px] ${showDetails ? 'rotate-180' : ''}`} />
-          </button>
-        </div>
-
+        {/* The six CR metrics, and the toggle that reveals them. The toggle is centred and always
+            sits last, so expanding pushes it to the bottom of the card rather than leaving it
+            stranded in the middle of the content it opened. */}
         {showDetails && (
           <div className="grid grid-cols-2 gap-[12px]">
             {metrics.map((m) => (
@@ -845,6 +915,16 @@ function ExpandedCard({
             ))}
           </div>
         )}
+
+        <button
+          onClick={onToggleDetails}
+          className="mx-auto flex items-center gap-[6px] rounded-pill px-[12px] py-[4px]"
+        >
+          <span className="whitespace-nowrap text-[14px] font-semibold leading-[20px] text-fg-secondary">
+            {showDetails ? 'Hide Details' : 'Show Details'}
+          </span>
+          <img src={`${I}caret.svg`} alt="" className={`h-[5.55px] w-[9px] ${showDetails ? 'rotate-180' : ''}`} />
+        </button>
       </div>
     </div>
   )
@@ -1115,7 +1195,14 @@ export function DecisionSupportScreen() {
 
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [tableSelected, setTableSelected] = useState<Set<string>>(new Set())
-  const [showDetails, setShowDetails] = useState(true)
+  /** Which expanded cards have their metrics open — per card, not one shared flag. */
+  const [detailsOpen, setDetailsOpen] = useState<Set<string>>(new Set())
+  const toggleDetails = (id: string) =>
+    setDetailsOpen((s) => {
+      const n = new Set(s)
+      n.has(id) ? n.delete(id) : n.add(id)
+      return n
+    })
   const [hoverCompare, setHoverCompare] = useState(false)
 
   // Fetch the live ranking once (guard against StrictMode double-invoke). Until it returns,
@@ -1134,17 +1221,26 @@ export function DecisionSupportScreen() {
     return hit && isDecisionSupport(hit) ? hit.decision_support : null
   }
   const [livePayload, setLivePayload] = useState<DecisionSupportPayload | null>(cachedRanking)
+  /** Answered already this session? Then skip the loading beat entirely — replaying it over data
+   *  we already have is theatre, not feedback. */
+  const [alreadyCached] = useState(() => livePayload !== null)
 
   // `decision_support` is the heaviest call in the flow (it ranks the whole roster with CR lookups)
   // and routinely takes 20-40s. Until it settles we show a shimmer, NOT the baked cards — those
-  // name strollers that aren't even on the page, and they look completely real.
-  const [rankSettled, setRankSettled] = useState(livePayload !== null)
+  // are a failure fallback, and they look completely real.
+  const [rankSettled, setRankSettled] = useState(alreadyCached)
+  /** LOADING_MS floor, so the shimmer never flashes past. */
+  const [minRankDone, setMinRankDone] = useState(alreadyCached)
   useEffect(() => {
-    if (rankSettled) return
+    if (alreadyCached) return
+    const min = window.setTimeout(() => setMinRankDone(true), LOADING_MS)
     // Ceiling, so a hung backend can't leave the user staring at a shimmer forever.
-    const cap = window.setTimeout(() => setRankSettled(true), 45000)
-    return () => window.clearTimeout(cap)
-  }, [rankSettled])
+    const cap = window.setTimeout(() => setRankSettled(true), MAX_LOADING_MS)
+    return () => {
+      window.clearTimeout(min)
+      window.clearTimeout(cap)
+    }
+  }, [alreadyCached])
   useEffect(() => {
     if (didFetch.current) return
     didFetch.current = true
@@ -1169,8 +1265,9 @@ export function DecisionSupportScreen() {
   }, [])
   const activeCards = livePayload ? productsToCards(livePayload) : cards
   const activeTableRows = livePayload ? productsToTableRows(livePayload) : tableRows
-  /** Still ranking — show the shimmer rather than the baked (wrong-roster) cards and table. */
-  const ranking = !rankSettled && !livePayload
+  /** Still ranking — show the shimmer rather than the baked fallback cards and table. Holds for
+   *  the LOADING_MS floor, then until the fetch actually settles. */
+  const ranking = !minRankDone || (!rankSettled && !livePayload)
   const liveVerdict = livePayload?.cr_verdict ?? null
   const topCard = activeCards[0]
 
@@ -1272,7 +1369,9 @@ export function DecisionSupportScreen() {
 
   return (
     <FigmaFrame>
-      <RetailBackdrop />
+      {/* Same product page she was on, full colour, with the 10% scrim under the panel. */}
+      <ProductBackdrop />
+      <DimOverlay onClick={() => navigate(routes.annotations)} />
       {/* Connie floating panel */}
       <div
         className="absolute flex flex-col overflow-clip rounded-[16px] border border-border-subtle bg-bg-secondary p-[37px] shadow-[0px_0px_15px_0px_rgba(0,0,0,0.16)]"
@@ -1318,7 +1417,7 @@ export function DecisionSupportScreen() {
                     <InsightCallout verdict={liveVerdict} />
                   )}
                   <SelectionHeader
-                    expanded={expanded}
+                    anySelected={tableSelected.size > 0}
                     allChecked={tableAllChecked}
                     toggleAll={toggleTableAll}
                     onShare={goShare}
@@ -1340,20 +1439,20 @@ export function DecisionSupportScreen() {
               ) : (
                 <>
                   <SelectionHeader
-                    expanded={expanded}
+                    anySelected={selected.size > 0}
                     allChecked={allChecked}
                     toggleAll={toggleAll}
                     onShare={goShare}
                   />
                   {expanded
-                    ? activeCards.map((c, i) => (
+                    ? activeCards.map((c) => (
                         <ExpandedCard
                           key={c.id}
                           card={c}
                           checked={selected.has(c.id)}
                           onCheck={() => toggle(c.id)}
-                          showDetails={i === 0 ? showDetails : false}
-                          onToggleDetails={() => setShowDetails((s) => !s)}
+                          showDetails={detailsOpen.has(c.id)}
+                          onToggleDetails={() => toggleDetails(c.id)}
                         />
                       ))
                     : activeCards.map((c) => (
