@@ -80,15 +80,43 @@ export const IconHelpFilled = ({ size = 20, ...p }: IconProps) => {
 }
 
 /**
- * Solid gear. Unlike the others this is its own geometry, not the outline's: `IconSettings` is a
- * single meandering stroke path that describes the gear's *outline*, and filling a path like that
- * paints a blob. This one is a real closed gear whose hub knocks out on the nonzero fill rule.
+ * Solid gear — Lucide's `settings` silhouette, with the hub masked out.
+ *
+ * Same trick as `IconHelpFilled`, and for the same reason: Lucide's path *traces* the gear's edge
+ * for stroking, so filling it directly paints a blob. Filling the traced shape and knocking the hub
+ * through with a mask keeps the solid icon identical to its outline twin.
  */
-export const IconSettingsFilled = ({ size = 20, ...p }: IconProps) => (
-  <svg {...solid(size)} {...p}>
-    <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96a7.03 7.03 0 0 0-1.62-.94l-.36-2.54a.48.48 0 0 0-.48-.41h-3.84a.48.48 0 0 0-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.49.49 0 0 0-.59.22L2.74 8.87a.49.49 0 0 0 .12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.49.49 0 0 0-.12-.61l-2.01-1.58zM12 15.6a3.6 3.6 0 1 1 0-7.2 3.6 3.6 0 0 1 0 7.2z" />
-  </svg>
-)
+export const IconSettingsFilled = ({ size = 20, ...p }: IconProps) => {
+  const id = useId()
+  const gear =
+    'M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915'
+  return (
+    <svg {...solid(size)} {...p}>
+      <mask id={id}>
+        {/* Stroked as well as filled, so the mask covers the gear's full outer edge. */}
+        <path
+          d={gear}
+          fill="#fff"
+          stroke="#fff"
+          strokeWidth="1.75"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <circle cx="12" cy="12" r="3" fill="#000" />
+      </mask>
+      <g mask={`url(#${id})`}>
+        <path
+          d={gear}
+          fill="currentColor"
+          stroke="currentColor"
+          strokeWidth="1.75"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </g>
+    </svg>
+  )
+}
 
 export const IconArrowUp = ({ size = 20, ...p }: IconProps) => (
   <svg {...base(size)} {...p}>
@@ -186,10 +214,16 @@ export const IconPeople = ({ size = 20, ...p }: IconProps) => (
   </svg>
 )
 
+/**
+ * Settings gear — Lucide's `settings`.
+ *
+ * Rendered through `base()` rather than the `<Settings>` component so it inherits this set's stroke
+ * weight (1.75, not Lucide's default 2) and sizing, and matches its neighbours in the nav rail.
+ */
 export const IconSettings = ({ size = 20, ...p }: IconProps) => (
   <svg {...base(size)} {...p}>
+    <path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915" />
     <circle cx="12" cy="12" r="3" />
-    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-2.82 1.17V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 8 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 3.6 15H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6h.09A1.65 1.65 0 0 0 11 3.09V3a2 2 0 1 1 4 0v.09A1.65 1.65 0 0 0 16 4.6a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 20.9 9v.09A1.65 1.65 0 0 0 21 11h.09" />
   </svg>
 )
 
