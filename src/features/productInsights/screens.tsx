@@ -15,6 +15,8 @@ import { cleanEvidence } from '@/lib/sourceFilter'
 import { LOADING_MS, MAX_LOADING_MS } from '@/lib/timing'
 import { NaviRail } from '@/components/connie/NaviRail'
 import { RetailBackdrop } from '@/components/connie/RetailBackdrop'
+import { badgePos, overlayBox, SEARCH_GRID } from '@/components/retail/AmazonSearchPage'
+import { AMAZON_PRODUCTS } from '@/mocks/retail'
 import { DimOverlay } from '@/components/connie/DimOverlay'
 import {
   IconHeart,
@@ -25,25 +27,39 @@ import {
   IconLeaf,
 } from '@/components/icons'
 
-/* The three strollers below are the ones actually visible on the retail backdrop
- * (`public/figma/insights-bg.png`, an Amazon search page). They must stay in sync with the
- * CR dataset — see `backend-data/README.md`. If you change the roster, change it in three
- * places: this file, the CR data file, and the roster count in the Langflow prompt. */
+/* The three strollers below are the ones on the mocked Amazon search page behind this screen.
+ * Their names/prices/photos live in `src/mocks/retail.ts` — the page and Connie's cards both read
+ * from there, so they can't drift. This file only names them for the backend calls.
+ *
+ * They must stay in sync with the CR dataset — see `backend-data/README.md`. If you change the
+ * roster, change it in three places: `mocks/retail.ts`, the CR data file, and the roster count in
+ * the Langflow prompt. */
 
-/** Centre product (green badge, left: 796) — drives the live product_insights request. */
-const LIVE_PRODUCT = 'Baby Trend Passport Switch 6-in-1'
+/** Centre product (green badge) — drives the live product_insights request. */
+const LIVE_PRODUCT = AMAZON_PRODUCTS.babytrend.name
 
-/** The two not-recommended strollers, keyed by which grey badge opens them.
- *  `pos` anchors each panel near its product card (panel is 540 wide in a 1440 frame, so the
- *  right-hand one is clamped to stay on canvas). Both panels remain draggable. */
+/** Panel width, and the furthest left it can start while staying on a 1440 canvas. */
+const PANEL_W = 540
+const PANEL_MAX_LEFT = 1440 - PANEL_W - 16
+
+/** Anchor a panel under the card at index `i`, clamped onto the canvas. Derived from the search
+ *  page's own layout, so a panel points at the product it's describing. Still draggable. */
+function panelPosFor(i: number) {
+  return {
+    left: Math.min(SEARCH_GRID.lefts[i], PANEL_MAX_LEFT),
+    top: SEARCH_GRID.cardTop + 56,
+  }
+}
+
+/** The two not-recommended strollers, keyed by which grey badge opens them. */
 const NOT_REC_PRODUCTS = {
   left: {
-    name: 'Dream On Me Aero Travel Umbrella Stroller',
-    pos: { left: 176, top: 170 },
+    name: AMAZON_PRODUCTS.aero.amazonTitle.split(',')[0],
+    pos: panelPosFor(0),
   },
   right: {
-    name: 'Graco Ready2Grow 2.0 Double Stroller',
-    pos: { left: 880, top: 170 },
+    name: AMAZON_PRODUCTS.graco.amazonTitle.split(',')[0],
+    pos: panelPosFor(2),
   },
 } as const
 
@@ -660,8 +676,8 @@ function InsightPanel({
     closeTimer.current = window.setTimeout(() => setTooltip(false), 300)
   }
 
-  // Draggable panel position (Figma default 736 / 287).
-  const [pos, setPos] = useState(initialPos ?? { left: 736, top: 287 })
+  // Draggable panel position — defaults under the recommended product's card.
+  const [pos, setPos] = useState(initialPos ?? panelPosFor(1))
   const dragRef = useRef<{ x: number; y: number; left: number; top: number } | null>(null)
   const onDragStart = (e: React.PointerEvent) => {
     dragRef.current = { x: e.clientX, y: e.clientY, left: pos.left, top: pos.top }
@@ -918,12 +934,9 @@ const notRecRows: RowData[] = [
 ]
 
 /* ----------------------------------------------- "Generating insights" overlay */
-/** The product-image squares Connie's badges land on (frame coords). */
-const PRODUCT_SQUARES = [
-  { left: 30, top: 132, width: 352, height: 346 },
-  { left: 452, top: 132, width: 358, height: 346 },
-  { left: 885, top: 132, width: 348, height: 346 },
-]
+/** The squares the "analyzing" shimmer covers — the product photo plus SEARCH_GRID.overlayPad on
+ *  each side. Same box the guided tour spotlights, so the two read as one gesture. */
+const PRODUCT_SQUARES = [overlayBox(0), overlayBox(1), overlayBox(2)]
 
 /** Yellow-green "AI is generating insights" shimmer over each product image, shown on load. */
 function GeneratingOverlay() {
@@ -935,7 +948,9 @@ function GeneratingOverlay() {
           className="pointer-events-none absolute animate-pulse overflow-hidden rounded-[8px] bg-gradient-to-br from-[rgba(217,237,226,0.85)] to-[rgba(251,245,221,0.85)]"
           style={{ left: s.left, top: s.top, width: s.width, height: s.height }}
         >
-          <span className="absolute left-[12px] top-[12px] flex items-center gap-[6px] rounded-full bg-white/70 px-[10px] py-[4px] text-[12px] font-semibold text-[#282923]">
+          {/* Bottom-left, not top-left: the retailer's own corner flags (Amazon's "Best Seller")
+              live in the top-left of a product, and two labels stacked there read as a collision. */}
+          <span className="absolute bottom-[12px] left-[12px] flex items-center gap-[6px] rounded-full bg-white/70 px-[10px] py-[4px] text-[12px] font-semibold text-[#282923]">
             <img src={`${A}shootingstar.svg`} alt="" className="size-[14px]" />
             Analyzing…
           </span>
@@ -953,13 +968,23 @@ function ProductBadges({
   onOpen: () => void
   onOpenNotRec: (slot: NotRecSlot) => void
 }) {
+  /* Badge index matches SEARCH_ROSTER order: aero, babytrend, graco. */
   return (
     <>
+      {/* Left card — Dream On Me Aero (not recommended). */}
+      <button
+        onClick={() => onOpenNotRec('left')}
+        className="pointer-events-auto absolute flex items-center justify-center rounded-full bg-[#9d9d9d] shadow-subtle"
+        style={{ ...badgePos(0), width: 45, height: 45 }}
+        aria-label={`See why the ${NOT_REC_PRODUCTS.left.name} isn't recommended`}
+      >
+        <img src={`${A}chatcircle.svg`} alt="" className="size-[28px]" />
+      </button>
       {/* Centre card — Baby Trend Passport Switch 6-in-1 (recommended). */}
       <button
         onClick={onOpen}
-        className="pointer-events-auto absolute flex items-center justify-center rounded-full bg-rating-excellent"
-        style={{ left: 796, top: 101, width: 45, height: 45 }}
+        className="pointer-events-auto absolute flex items-center justify-center rounded-full bg-rating-excellent shadow-subtle"
+        style={{ ...badgePos(1), width: 45, height: 45 }}
         aria-label={`Open Connie insights for the ${LIVE_PRODUCT}`}
       >
         <img src={`${A}chatblob.png`} alt="" className="size-[28px] object-contain" />
@@ -967,18 +992,9 @@ function ProductBadges({
       {/* Right card — Graco Ready2Grow 2.0 (not recommended). */}
       <button
         onClick={() => onOpenNotRec('right')}
-        className="pointer-events-auto absolute flex items-center justify-center rounded-full bg-[#9d9d9d]"
-        style={{ left: 1215, top: 101, width: 45, height: 45 }}
+        className="pointer-events-auto absolute flex items-center justify-center rounded-full bg-[#9d9d9d] shadow-subtle"
+        style={{ ...badgePos(2), width: 45, height: 45 }}
         aria-label={`See why the ${NOT_REC_PRODUCTS.right.name} isn't recommended`}
-      >
-        <img src={`${A}chatcircle.svg`} alt="" className="size-[28px]" />
-      </button>
-      {/* Left card — Dream On Me Aero (not recommended). */}
-      <button
-        onClick={() => onOpenNotRec('left')}
-        className="pointer-events-auto absolute flex items-center justify-center rounded-full bg-[#9d9d9d]"
-        style={{ left: 356, top: 100, width: 45, height: 45 }}
-        aria-label={`See why the ${NOT_REC_PRODUCTS.left.name} isn't recommended`}
       >
         <img src={`${A}chatcircle.svg`} alt="" className="size-[28px]" />
       </button>

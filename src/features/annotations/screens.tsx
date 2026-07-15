@@ -83,10 +83,12 @@ function SourceCard({ avatar, name, quote, chip, ring = true, fixed = true }: So
           </div>
           <p className="w-full text-[12px] font-normal leading-[17px] text-fg-primary">{quote}</p>
         </div>
-        <div className="flex items-center gap-[4px] rounded-[80px] border-[0.5px] border-border-subtle bg-white py-[2px] pl-[8px] pr-[12px]">
-          <img alt="" src={asset.link} className="size-[14px]" />
-          <p className="whitespace-nowrap text-[10px] leading-[20px] tracking-[0.1px] text-[#222]">{chip}</p>
-          <img alt="" src={asset.arrow} className="size-[12px]" />
+        {/* max-w-full + truncate: these are real link titles now, and a nowrap chip just ran off
+            the edge of the card. */}
+        <div className="flex max-w-full items-center gap-[4px] rounded-[80px] border-[0.5px] border-border-subtle bg-white py-[2px] pl-[8px] pr-[10px]">
+          <img alt="" src={asset.link} className="size-[14px] shrink-0" />
+          <p className="truncate text-[10px] leading-[20px] tracking-[0.1px] text-[#222]">{chip}</p>
+          <img alt="" src={asset.arrow} className="size-[12px] shrink-0" />
         </div>
       </div>
     </div>

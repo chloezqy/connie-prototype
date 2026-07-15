@@ -17,6 +17,7 @@ import { NaviRail } from '@/components/connie/NaviRail'
 import { ProductBackdrop } from '@/components/connie/RetailBackdrop'
 import { DimOverlay } from '@/components/connie/DimOverlay'
 import { rows as insightRows, type RowData } from '@/features/productInsights/screens'
+import { AMAZON_PRODUCTS as R } from '@/mocks/retail'
 import { IconCaretDown } from '@/components/icons'
 
 /* ------------------------------------------------------------------ *
@@ -49,15 +50,6 @@ const asset = {
   share: `${A}share.svg`,
   trash: `${A}trash.svg`,
   whyCheck: `${A}whyfits-check.svg`,
-  // Five distinct product photos, each cropped from the retailer page the product actually
-  // appears on in this prototype — the three strollers on the Amazon search page, plus the
-  // Evenflo (the product detail page she browses) and the Joie from that page's rail.
-  // The old prod-vista / prod-citymini shots were 160×160 and went soft at card size.
-  prodAero: `${A}prod-aero.png`,
-  prodBabyTrend: `${A}prod-babytrend.png`,
-  prodGraco: `${A}prod-graco.png`,
-  prodEvenflo: `${A}prod-evenflo.png`,
-  prodJoie: `${A}prod-joie.png`,
   avCr: `${A}av-cr.png`,
   avReddit: `${A}av-reddit.png`,
   naviChat: `${A}navi-chat.svg`,
@@ -286,17 +278,19 @@ export type Card = {
 
 /**
  * The baked roster — a FAILURE FALLBACK, not a loading state (the shimmer covers the wait).
- * It leads with the three strollers actually on the retail page, so even the fallback describes
- * products the shopper can see. Every card gets its own photo.
+ *
+ * Name, price and photo come from `mocks/retail.ts` — the same source the mocked Amazon pages
+ * read — so a saved card can never name a different stroller than the page behind it. Only
+ * Connie's own opinions (rank, rationale, evidence) are written here.
  */
 export const cards: Card[] = [
   {
     id: 'babytrend',
-    img: asset.prodBabyTrend,
+    img: R.babytrend.img,
     rank: '#1 BEST MATCH',
     rankBrand: true,
-    title: 'Baby Trend Passport Switch 6-in-1',
-    price: '$199.99',
+    title: R.babytrend.name,
+    price: R.babytrend.price,
     at: 'AT AMAZON',
     why: 'Matches your priority on easy fold and everyday reliability. CR scored it top-tier for maneuverability and safety at a fraction of the price of the premium field.',
     whyLong:
@@ -309,11 +303,11 @@ export const cards: Card[] = [
   },
   {
     id: 'evenflo',
-    img: asset.prodEvenflo,
+    img: R.evenflo.img,
     rank: '#2 RUNNER UP',
     rankBrand: false,
-    title: 'Evenflo Pivot NXT Travel System',
-    price: '$379.99',
+    title: R.evenflo.name,
+    price: R.evenflo.price,
     at: 'AT AMAZON',
     why: 'The smoothest ride in the group and a genuinely one-handed fold. Loses to the Passport on price, and the basket is smaller than it looks.',
     whyLong:
@@ -326,11 +320,11 @@ export const cards: Card[] = [
   },
   {
     id: 'joie',
-    img: asset.prodJoie,
+    img: R.joie.img,
     rank: '#3 LIGHTEST',
     rankBrand: false,
-    title: 'Joie Baby Kava & Rue Travel System',
-    price: '$549.99',
+    title: R.joie.name,
+    price: R.joie.price,
     at: 'AT WALMART',
     why: 'The lightest full travel system here, and it clears a turnstile — the one to beat if the stairs are what worry you. Pricey for the spec.',
     whyLong:
@@ -340,11 +334,11 @@ export const cards: Card[] = [
   },
   {
     id: 'graco',
-    img: asset.prodGraco,
+    img: R.graco.img,
     rank: 'NOT RECOMMENDED',
     rankBrand: false,
-    title: 'Graco Ready2Grow 2.0 Double Stroller',
-    price: '$299.00',
+    title: R.graco.name,
+    price: R.graco.price,
     at: 'AT AMAZON',
     why: 'Only worth it if you need two seats. CR scored it 58/100 — a wide turning radius and a bulky fold make it a poor fit for a walk-up.',
     whyLong:
@@ -354,11 +348,11 @@ export const cards: Card[] = [
   },
   {
     id: 'aero',
-    img: asset.prodAero,
+    img: R.aero.img,
     rank: 'NOT RECOMMENDED',
     rankBrand: false,
-    title: 'Dream On Me Aero Travel Umbrella',
-    price: '$33.99',
+    title: R.aero.name,
+    price: R.aero.price,
     at: 'AT AMAZON',
     why: "The cheapest option on the shelf, and it shows: CR scored it 54/100 with low marks for ride comfort and durability.",
     whyLong:
@@ -417,14 +411,14 @@ function RankingShimmer({ count = 3 }: { count?: number }) {
  * from that page); anything else the agent surfaces falls back to a generic stroller photo, and
  * alternates so a live list never shows the same picture five times.
  */
-const FALLBACK_IMAGES = [asset.prodEvenflo, asset.prodJoie]
+const FALLBACK_IMAGES = [R.evenflo.img, R.joie.img]
 function productImage(name: string, index = 0): string {
   const n = name.toLowerCase()
-  if (n.includes('baby trend') || n.includes('passport')) return asset.prodBabyTrend
-  if (n.includes('graco') || n.includes('ready2grow')) return asset.prodGraco
-  if (n.includes('dream on me') || n.includes('aero')) return asset.prodAero
-  if (n.includes('evenflo') || n.includes('pivot')) return asset.prodEvenflo
-  if (n.includes('joie') || n.includes('kava')) return asset.prodJoie
+  if (n.includes('baby trend') || n.includes('passport')) return R.babytrend.img
+  if (n.includes('graco') || n.includes('ready2grow')) return R.graco.img
+  if (n.includes('dream on me') || n.includes('aero')) return R.aero.img
+  if (n.includes('evenflo') || n.includes('pivot')) return R.evenflo.img
+  if (n.includes('joie') || n.includes('kava')) return R.joie.img
   return FALLBACK_IMAGES[index % FALLBACK_IMAGES.length]
 }
 
@@ -811,14 +805,14 @@ function ExpandedVerdictBanner({ product, verdict }: { product?: Card; verdict?:
   return (
     <div className="flex w-full shrink-0 items-center gap-[16px] rounded-[16px] bg-gradient-to-r from-[rgba(217,237,226,0.3)] to-[rgba(251,245,221,0.3)] p-[16px]">
       <div className="flex size-[64px] shrink-0 items-center justify-center overflow-clip rounded-[8px] bg-bg-tertiary">
-        <img src={product?.img ?? asset.prodBabyTrend} alt="" className="size-full object-cover" />
+        <img src={product?.img ?? R.babytrend.img} alt="" className="size-full object-cover" />
       </div>
       <div className="flex w-[200px] shrink-0 flex-col gap-[4px]">
         <div className="flex w-fit rounded-[4px] bg-bg-brand-muted px-[8px] py-[2px]">
           <span className="text-[12px] font-semibold leading-[16px] text-fg-brand">CR Verdict</span>
         </div>
-        <p className="text-[18px] font-semibold leading-[22px] text-fg-primary">{product?.title ?? 'Baby Trend Passport Switch 6-in-1'}</p>
-        <p className="text-[14px] leading-[20px] text-fg-primary">{product?.price ?? '$199.99'}</p>
+        <p className="text-[18px] font-semibold leading-[22px] text-fg-primary">{product?.title ?? R.babytrend.name}</p>
+        <p className="text-[14px] leading-[20px] text-fg-primary">{product?.price ?? R.babytrend.price}</p>
       </div>
       <p className="flex-1 text-[16px] leading-[24px] text-fg-secondary">
         {verdict ??
@@ -1403,7 +1397,7 @@ export function DecisionSupportScreen() {
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M15 6l-6 6 6 6" /></svg>
                 </button>
                 <div className="flex flex-col">
-                  <span className="text-[16px] font-semibold leading-[22px] text-fg-primary">{reviewProduct ?? topCard?.title ?? 'Baby Trend Passport Switch 6-in-1'}</span>
+                  <span className="text-[16px] font-semibold leading-[22px] text-fg-primary">{reviewProduct ?? topCard?.title ?? R.babytrend.name}</span>
                   <span className="text-[14px] leading-[20px] text-fg-secondary">Full Review Deep-dive</span>
                 </div>
               </div>

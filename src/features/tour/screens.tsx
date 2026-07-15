@@ -4,20 +4,26 @@ import { useNavigate } from 'react-router-dom'
 import { FigmaFrame } from '@/layouts/FigmaFrame'
 import { NaviRail } from '@/components/connie/NaviRail'
 import { RetailBackdrop } from '@/components/connie/RetailBackdrop'
+import { badgePos, overlayBox } from '@/components/retail/AmazonSearchPage'
 import { routes } from '@/app/routes'
 
 /* ---------- Tour asset paths (public/figma, prefix "tour-") ---------- */
 const STAR = '/figma/tour-star.png'
 
+/** The recommended stroller is the middle card of the three on the search page. */
+const HERO = 1
+
 const BUBBLE_SHADOW = '0px 4px 8px rgba(5,5,0,0.02), 0px 2px 4px rgba(5,5,0,0.16)'
 const PILL_SHADOW = '0px 8px 24px 0px rgba(0,0,0,0.14)'
 
 /* ---------- Star badge over the highlighted product (T1 / T2) ---------- */
+/** Sits exactly where Product Insights' badge will be, so "tap a star" points at the thing the
+ *  next screen actually shows. Both read the position from the search page's own layout. */
 function StarBadge({ withBorder }: { withBorder: boolean }) {
   return (
     <div
-      className="absolute flex items-center justify-center rounded-full bg-[#00ae3d]"
-      style={{ left: 797, top: 102, width: 45, height: 45, border: withBorder ? '1px solid #ffd500' : undefined }}
+      className="absolute flex items-center justify-center rounded-full bg-[#00ae3d] shadow-subtle"
+      style={{ ...badgePos(HERO), width: 45, height: 45, border: withBorder ? '1px solid #ffd500' : undefined }}
     >
       <img alt="" src={STAR} className="size-[28px] object-cover" />
     </div>
@@ -184,10 +190,7 @@ export function TourScreen() {
           <div
             className="absolute rounded-[8px]"
             style={{
-              left: 445,
-              top: 117,
-              width: 380,
-              height: 377,
+              ...overlayBox(HERO),
               background: 'rgba(255,255,255,0.14)',
               border: '2px solid #c4e860',
             }}
@@ -196,10 +199,14 @@ export function TourScreen() {
         </>
       )}
 
-      {/* Step 1 tooltip — below the card, arrow up */}
+      {/* Step 1 tooltip — beside the spotlight, arrow pointing back at it. Sitting it *below*
+          collided with the Skip/Next pill. */}
       {step === 0 && (
-        <div className="absolute flex flex-col items-start" style={{ left: 676, top: 510 }}>
-          <ArrowUp style={{ marginLeft: 32 }} />
+        <div
+          className="absolute flex items-center"
+          style={{ left: overlayBox(HERO).left + overlayBox(HERO).width + 4, top: overlayBox(HERO).top + 70 }}
+        >
+          <ArrowLeft />
           <Bubble
             title="Connie stars the picks that fit you"
             body="Starred picks are based on the priorities you just set."
@@ -208,9 +215,12 @@ export function TourScreen() {
         </div>
       )}
 
-      {/* Step 2 tooltip — beside the badge, arrow up */}
+      {/* Step 2 tooltip — below the badge, arrow up */}
       {step === 1 && (
-        <div className="absolute flex flex-col items-start" style={{ left: 758, top: 164 }}>
+        <div
+          className="absolute flex flex-col items-start"
+          style={{ left: badgePos(HERO).left - 30, top: badgePos(HERO).top + 62 }}
+        >
           <ArrowUp style={{ marginLeft: 32 }} />
           <Bubble
             title="Tap a star for CR's take"
