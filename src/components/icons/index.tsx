@@ -1,4 +1,4 @@
-import type { SVGProps } from 'react'
+import { useId, type SVGProps } from 'react'
 
 type IconProps = SVGProps<SVGSVGElement> & { size?: number }
 
@@ -13,6 +13,20 @@ const base = (size: number): SVGProps<SVGSVGElement> => ({
   strokeLinejoin: 'round',
 })
 
+/**
+ * Solid counterparts to the outline icons — the nav rail's selected state.
+ *
+ * Same 24×24 grid as `base`, painted rather than stroked, so a selected tab reads as filled-in
+ * against its unselected siblings.
+ */
+const solid = (size: number): SVGProps<SVGSVGElement> => ({
+  width: size,
+  height: size,
+  viewBox: '0 0 24 24',
+  fill: 'currentColor',
+  stroke: 'none',
+})
+
 export const IconX = ({ size = 20, ...p }: IconProps) => (
   <svg {...base(size)} {...p}>
     <path d="M6 6l12 12M18 6L6 18" />
@@ -24,6 +38,85 @@ export const IconChat = ({ size = 20, ...p }: IconProps) => (
     <path d="M21 11.5a8.38 8.38 0 0 1-8.5 8.5 8.5 8.5 0 0 1-3.8-.9L3 21l1.9-5.7a8.5 8.5 0 0 1-.9-3.8A8.38 8.38 0 0 1 12.5 3 8.38 8.38 0 0 1 21 11.5z" />
   </svg>
 )
+
+/* ---- Solid nav-rail icons. Chat/Heart reuse their outline geometry verbatim — those paths are
+   already closed shapes, so filling them gives an exact solid twin of the outline. ---- */
+
+export const IconChatFilled = ({ size = 20, ...p }: IconProps) => (
+  <svg {...solid(size)} {...p}>
+    <path d="M21 11.5a8.38 8.38 0 0 1-8.5 8.5 8.5 8.5 0 0 1-3.8-.9L3 21l1.9-5.7a8.5 8.5 0 0 1-.9-3.8A8.38 8.38 0 0 1 12.5 3 8.38 8.38 0 0 1 21 11.5z" />
+  </svg>
+)
+
+export const IconHeartFilled = ({ size = 20, ...p }: IconProps) => (
+  <svg {...solid(size)} {...p}>
+    <path d="M20.8 6.6a5 5 0 0 0-7.1 0L12 8.3l-1.7-1.7a5 5 0 1 0-7.1 7.1L12 21l8.8-7.3a5 5 0 0 0 0-7.1z" />
+  </svg>
+)
+
+/**
+ * Solid help mark: the same disc and question mark as the outline, with the "?" masked OUT of the
+ * fill rather than drawn on top. Knocking it through means the button's own background shows in the
+ * counter, which is what makes it read as a solid icon instead of a green blob.
+ */
+export const IconHelpFilled = ({ size = 20, ...p }: IconProps) => {
+  const id = useId()
+  return (
+    <svg {...solid(size)} {...p}>
+      <mask id={id}>
+        <circle cx="12" cy="12" r="9" fill="#fff" />
+        <path
+          d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01"
+          fill="none"
+          stroke="#000"
+          strokeWidth="1.75"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </mask>
+      <circle cx="12" cy="12" r="9" mask={`url(#${id})`} />
+    </svg>
+  )
+}
+
+/**
+ * Solid gear — Lucide's `settings` silhouette, with the hub masked out.
+ *
+ * Same trick as `IconHelpFilled`, and for the same reason: Lucide's path *traces* the gear's edge
+ * for stroking, so filling it directly paints a blob. Filling the traced shape and knocking the hub
+ * through with a mask keeps the solid icon identical to its outline twin.
+ */
+export const IconSettingsFilled = ({ size = 20, ...p }: IconProps) => {
+  const id = useId()
+  const gear =
+    'M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915'
+  return (
+    <svg {...solid(size)} {...p}>
+      <mask id={id}>
+        {/* Stroked as well as filled, so the mask covers the gear's full outer edge. */}
+        <path
+          d={gear}
+          fill="#fff"
+          stroke="#fff"
+          strokeWidth="1.75"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <circle cx="12" cy="12" r="3" fill="#000" />
+      </mask>
+      <g mask={`url(#${id})`}>
+        <path
+          d={gear}
+          fill="currentColor"
+          stroke="currentColor"
+          strokeWidth="1.75"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </g>
+    </svg>
+  )
+}
 
 export const IconArrowUp = ({ size = 20, ...p }: IconProps) => (
   <svg {...base(size)} {...p}>
@@ -121,10 +214,16 @@ export const IconPeople = ({ size = 20, ...p }: IconProps) => (
   </svg>
 )
 
+/**
+ * Settings gear — Lucide's `settings`.
+ *
+ * Rendered through `base()` rather than the `<Settings>` component so it inherits this set's stroke
+ * weight (1.75, not Lucide's default 2) and sizing, and matches its neighbours in the nav rail.
+ */
 export const IconSettings = ({ size = 20, ...p }: IconProps) => (
   <svg {...base(size)} {...p}>
+    <path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915" />
     <circle cx="12" cy="12" r="3" />
-    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-2.82 1.17V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 8 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 3.6 15H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6h.09A1.65 1.65 0 0 0 11 3.09V3a2 2 0 1 1 4 0v.09A1.65 1.65 0 0 0 16 4.6a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 20.9 9v.09A1.65 1.65 0 0 0 21 11h.09" />
   </svg>
 )
 

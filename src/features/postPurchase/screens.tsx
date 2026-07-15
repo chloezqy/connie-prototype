@@ -66,12 +66,50 @@ function ProductCard() {
 function ThanksBanner({ stat }: { stat?: CommunityStat | null }) {
   return (
     <div className="flex w-full shrink-0 items-center gap-[10px] overflow-clip rounded-[12px] bg-[#f2eddb] py-[13px] pl-[15px] pr-[16px]">
-      <img alt="" src={asset.bannerStar} className="size-[20px] shrink-0" />
+      <img
+        alt=""
+        src={asset.bannerStar}
+        className="size-5 shrink-0 self-start translate-y-[2px]"
+      />
       <p className="min-w-px flex-1 text-[16px] leading-[24px] text-[#80610f]">
         {stat
           ? `Thanks! ${stat.percent}% ${stat.statement}`
-          : 'Thanks! Your input just helped 3 parents deciding right now.'}
+          : 'Thanks! Your input just helped 273 parents deciding right now.'}
       </p>
+    </div>
+  )
+}
+
+/**
+ * "How do you like it?" answered on a 1-10 scale.
+ *
+ * Happiness with a purchase is a matter of degree, and three chips flattened it into a verdict.
+ * The ends are labelled because a bare number line doesn't say which way is good.
+ */
+function HappinessScale({ value, onSelect }: { value: number | null; onSelect: (n: number) => void }) {
+  return (
+    <div className="flex w-full shrink-0 flex-col gap-[8px]">
+      <div className="flex w-full items-center justify-between gap-[6px]">
+        {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
+          <button
+            key={n}
+            onClick={() => onSelect(n)}
+            aria-label={`${n} out of 10`}
+            aria-pressed={value === n}
+            className={`flex size-[38px] shrink-0 items-center justify-center rounded-full text-[15px] font-semibold transition-colors ${
+              value === n
+                ? 'bg-brand text-fg-inverse'
+                : 'border border-border-subtle bg-bg-primary text-fg-primary hover:border-border-black'
+            }`}
+          >
+            {n}
+          </button>
+        ))}
+      </div>
+      <div className="flex w-full items-center justify-between">
+        <span className="text-utility text-fg-secondary">1 · Not happy</span>
+        <span className="text-utility text-fg-secondary">10 · Very happy</span>
+      </div>
     </div>
   )
 }
@@ -93,14 +131,17 @@ export function PostPurchaseScreen() {
   const [params] = useSearchParams()
   const [open, setOpen] = useState(params.get('open') === '1')
   const [q1, setQ1] = useState<string | null>(null)
-  const [q2, setQ2] = useState<string | null>(null)
+  /** How happy she is, 1-10. A number, not a chip: "how do you like it" is a matter of degree. */
+  const [q2, setQ2] = useState<number | null>(null)
   const [q3, setQ3] = useState<string | null>(null)
   const [draft, setDraft] = useState('')
 
   // Fetch the live check-in once (guard against StrictMode double-invoke). Baked copy shows
-  // until it returns, then live message + sentiment options swap in.
+  // until it returns, then the live message swaps in.
+  //
+  // The payload's `sentiment_options` are deliberately ignored now: "how do you like it" is a 1-10
+  // scale, so there are no sentiment chips left to fill. The backend contract is unchanged.
   const [checkInMsg, setCheckInMsg] = useState<string | null>(null)
-  const [sentiments, setSentiments] = useState<string[] | null>(null)
   const [stat, setStat] = useState<CommunityStat | null>(null)
   const didFetch = useRef(false)
   useEffect(() => {
@@ -110,9 +151,6 @@ export function PostPurchaseScreen() {
       .then((r) => {
         if (isPostPurchase(r)) {
           setCheckInMsg(r.post_purchase.message)
-          if (r.post_purchase.sentiment_options.length > 0) {
-            setSentiments(r.post_purchase.sentiment_options)
-          }
           setStat(r.post_purchase.community_stat)
         }
       })
@@ -120,7 +158,14 @@ export function PostPurchaseScreen() {
         /* keep baked content on error */
       })
   }, [])
-  const sentimentChips = sentiments ?? ['Love it', "It's fine", 'Not what I hoped']
+  /** Q3 is the one open question, so the composer is its answer field while it's outstanding. */
+  const awaitingQ3 = q2 !== null && !q3
+  const sendDraft = () => {
+    const text = draft.trim()
+    if (!text) return
+    if (awaitingQ3) setQ3(text)
+    setDraft('')
+  }
 
   return (
     <FigmaFrame bg="#f4f4f5">
@@ -143,8 +188,12 @@ export function PostPurchaseScreen() {
             <ChatComposer
               value={draft}
               onChange={setDraft}
-              onSend={() => setDraft('')}
-              placeholder="Add anything in your own words…"
+              onSend={sendDraft}
+              placeholder={
+                awaitingQ3
+                  ? "Tell me what would've made it better…"
+                  : 'Add anything in your own words…'
+              }
             />
           }
         >
@@ -167,38 +216,20 @@ export function PostPurchaseScreen() {
           </Turn>
           {q1 && <UserBubble>{q1}</UserBubble>}
 
-          {/* Q2 — how's it treating you? */}
+          {/* Q2 — how do you like it? 1-10. */}
           <Turn when={!!q1}>
             <ConnieGroup>
-              <BotBubble>{checkInMsg ?? "How's it treating you?"}</BotBubble>
-              <ChipRow>
-                {[...sentimentChips, 'Other'].map((label) => (
-                  <ChatChip
-                    key={label}
-                    label={label}
-                    state={q2 === label ? 'selected' : 'default'}
-                    onClick={() => setQ2(label)}
-                  />
-                ))}
-              </ChipRow>
+              <BotBubble>{checkInMsg ?? 'How do you like it?'}</BotBubble>
+              <HappinessScale value={q2} onSelect={setQ2} />
             </ConnieGroup>
           </Turn>
-          {q2 && <UserBubble>{q2}</UserBubble>}
+          {q2 !== null && <UserBubble>{q2} out of 10</UserBubble>}
 
-          {/* Q3 — what would've made it better? */}
-          <Turn when={!!q2}>
+          {/* Q3 — what would've made it better? Typed, not picked: the whole value of this answer
+              is the thing we didn't think to put on a chip. She types it in the composer below. */}
+          <Turn when={q2 !== null}>
             <ConnieGroup>
-              <BotBubble>Love that. Quick one - what would've made it even better?</BotBubble>
-              <ChipRow>
-                {['Fold & portability', 'Comfort', 'Durability', 'Other'].map((label) => (
-                  <ChatChip
-                    key={label}
-                    label={label}
-                    state={q3 === label ? 'selected' : 'default'}
-                    onClick={() => setQ3(label)}
-                  />
-                ))}
-              </ChipRow>
+              <BotBubble>Thanks! Quick one - what would've made it even better?</BotBubble>
             </ConnieGroup>
           </Turn>
           {q3 && <UserBubble>{q3}</UserBubble>}

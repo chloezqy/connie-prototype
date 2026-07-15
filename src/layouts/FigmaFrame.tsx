@@ -1,7 +1,8 @@
 import { useLayoutEffect, useState, type ReactNode } from 'react'
 
 const FRAME_W = 1440
-const FRAME_H = 900
+/** Canvas height. Exported so overlays can tell what falls below the fold. */
+export const FRAME_H = 900
 
 /**
  * A faithful 1440×900 Figma frame canvas. Children are positioned with the exact

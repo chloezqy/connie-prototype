@@ -3,6 +3,26 @@
 @tailwind components;
 @tailwind utilities;
 
+/**
+ * CR-Averta — the licensed Consumer Reports face, served from `public/fonts`.
+ *
+ * One variable file covers the whole family (weight axis 300–900), so every weight the app asks
+ * for is a real cut rather than a browser-synthesized fake. The source is the "Large" webfont,
+ * whose charset spans full Latin + the punctuation and symbols the UI uses (arrows, ×, ≈, …).
+ *
+ * `swap` keeps text readable during the fetch, and the family name here is the first entry in
+ * `--font-sans`, so this is what the whole app resolves to.
+ */
+@font-face {
+  font-family: 'CR-Averta';
+  src:
+    url('/fonts/CR-AvertaVF.woff2') format('woff2-variations'),
+    url('/fonts/CR-AvertaVF.woff') format('woff-variations');
+  font-weight: 300 900;
+  font-style: normal;
+  font-display: swap;
+}
+
 @layer base {
   html,
   body,

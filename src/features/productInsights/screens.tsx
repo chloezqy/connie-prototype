@@ -15,14 +15,18 @@ import { cleanEvidence } from '@/lib/sourceFilter'
 import { LOADING_MS, MAX_LOADING_MS } from '@/lib/timing'
 import { NaviRail } from '@/components/connie/NaviRail'
 import { RetailBackdrop } from '@/components/connie/RetailBackdrop'
-import { badgePos, overlayBox, SEARCH_GRID } from '@/components/retail/AmazonSearchPage'
+import {
+  badgePos,
+  cardOverlayBox,
+  SEARCH_GRID,
+  SEARCH_PRODUCT_COUNT,
+} from '@/components/retail/AmazonSearchPage'
 import { AMAZON_PRODUCTS } from '@/mocks/retail'
 import { DimOverlay } from '@/components/connie/DimOverlay'
 import {
   IconHeart,
   IconShieldCheck,
   IconTag,
-  IconSparkle,
   IconHandTap,
   IconLeaf,
 } from '@/components/icons'
@@ -42,28 +46,41 @@ const LIVE_PRODUCT = AMAZON_PRODUCTS.babytrend.name
 const PANEL_W = 540
 const PANEL_MAX_LEFT = 1440 - PANEL_W - 16
 
-/** Anchor a panel under the card at index `i`, clamped onto the canvas. Derived from the search
- *  page's own layout, so a panel points at the product it's describing. Still draggable. */
+/** Anchor a panel under the card at column `i % 3`, clamped onto the canvas. Derived from the
+ *  search page's own layout, so a panel points at the product it's describing. Still draggable.
+ *  Row-2 products borrow row 1's top: their own row starts below the fold, so a panel anchored
+ *  there would open off-canvas. */
 function panelPosFor(i: number) {
   return {
-    left: Math.min(SEARCH_GRID.lefts[i], PANEL_MAX_LEFT),
+    left: Math.min(SEARCH_GRID.lefts[i % 3], PANEL_MAX_LEFT),
     top: SEARCH_GRID.cardTop + 56,
   }
 }
 
-/** The two not-recommended strollers, keyed by which grey badge opens them. */
+/**
+ * Every stroller Connie passes on, keyed by which grey badge opens it — the two flanking the pick
+ * in row 1, plus all three in the cut-off second row.
+ */
 const NOT_REC_PRODUCTS = {
-  left: {
-    name: AMAZON_PRODUCTS.aero.amazonTitle.split(',')[0],
-    pos: panelPosFor(0),
-  },
-  right: {
-    name: AMAZON_PRODUCTS.graco.amazonTitle.split(',')[0],
-    pos: panelPosFor(2),
-  },
+  left: { name: AMAZON_PRODUCTS.aero.amazonTitle.split(',')[0], pos: panelPosFor(0) },
+  right: { name: AMAZON_PRODUCTS.graco.amazonTitle.split(',')[0], pos: panelPosFor(2) },
+  row2a: { name: AMAZON_PRODUCTS.evenflo.amazonTitle.split(',')[0], pos: panelPosFor(3) },
+  row2b: { name: AMAZON_PRODUCTS.joie.amazonTitle.split(',')[0], pos: panelPosFor(4) },
+  row2c: { name: AMAZON_PRODUCTS.aero.amazonTitle.split(',')[0], pos: panelPosFor(5) },
 } as const
 
 type NotRecSlot = keyof typeof NOT_REC_PRODUCTS
+const NOT_REC_SLOTS = Object.keys(NOT_REC_PRODUCTS) as NotRecSlot[]
+
+/** Which of the six cards Connie recommends; every other index gets a grey "why not" badge. */
+const RECOMMENDED_INDEX = 1
+const NOT_REC_BY_INDEX: Record<number, NotRecSlot> = {
+  0: 'left',
+  2: 'right',
+  3: 'row2a',
+  4: 'row2b',
+  5: 'row2c',
+}
 
 /* ------------------------------------------------------------------ *
  * Product Insights — faithful reproduction of Figma frames
@@ -452,7 +469,6 @@ const COMMUNITY_ICON: Record<string, string> = {
 const PREFERENCE_ICON: Record<string, (p: { size?: number; className?: string }) => JSX.Element> = {
   'Long-term reliability': IconShieldCheck,
   'Value for price': IconTag,
-  Aesthetics: IconSparkle,
   'Ease of use': IconHandTap,
   Sustainability: IconLeaf,
 }
@@ -498,8 +514,14 @@ function BasedOnPopover({
   const togglePreference = usePreferences((s) => s.togglePreference)
   const [editing, setEditing] = useState(false)
 
-  const shownSources = editing ? ALL_COMMUNITIES : sources
-  const shownPreferences = editing ? ALL_PREFERENCES : preferences
+  /* Editing offers every named option plus anything she typed under onboarding's "Other" — without
+     the second half, a custom source/value would vanish from the list that's meant to edit it. */
+  const shownSources = editing
+    ? [...ALL_COMMUNITIES, ...sources.filter((s) => !ALL_COMMUNITIES.includes(s))]
+    : sources
+  const shownPreferences = editing
+    ? [...ALL_PREFERENCES, ...preferences.filter((p) => !ALL_PREFERENCES.includes(p))]
+    : preferences
 
   return (
     <div
@@ -934,11 +956,12 @@ const notRecRows: RowData[] = [
 ]
 
 /* ----------------------------------------------- "Generating insights" overlay */
-/** The squares the "analyzing" shimmer covers — the product photo plus SEARCH_GRID.overlayPad on
- *  each side. Same box the guided tour spotlights, so the two read as one gesture. */
-const PRODUCT_SQUARES = [overlayBox(0), overlayBox(1), overlayBox(2)]
+/** The boxes the "analyzing" shimmer covers — each product's WHOLE card (photo, title, rating,
+ *  price and all) plus SEARCH_GRID.cardOverlayPad, because Connie is reading the product, not its
+ *  picture. All six on the page, including the row cut off by the fold. */
+const PRODUCT_SQUARES = Array.from({ length: SEARCH_PRODUCT_COUNT }, (_, i) => cardOverlayBox(i))
 
-/** Yellow-green "AI is generating insights" shimmer over each product image, shown on load. */
+/** Yellow-green "AI is generating insights" shimmer over each product, shown on load. */
 function GeneratingOverlay() {
   return (
     <>
@@ -948,9 +971,10 @@ function GeneratingOverlay() {
           className="pointer-events-none absolute animate-pulse overflow-hidden rounded-[8px] bg-gradient-to-br from-[rgba(217,237,226,0.85)] to-[rgba(251,245,221,0.85)]"
           style={{ left: s.left, top: s.top, width: s.width, height: s.height }}
         >
-          {/* Bottom-left, not top-left: the retailer's own corner flags (Amazon's "Best Seller")
-              live in the top-left of a product, and two labels stacked there read as a collision. */}
-          <span className="absolute bottom-[12px] left-[12px] flex items-center gap-[6px] rounded-full bg-white/70 px-[10px] py-[4px] text-[12px] font-semibold text-[#282923]">
+          {/* Top-left on every card, so the six labels land on one line per row and read as one
+              pass over the page. It also keeps the bottom row's label above the fold.
+              `top` clears Amazon's own "Best Seller" flag, which occupies the same corner. */}
+          <span className="absolute left-[10px] top-[10px] flex items-center gap-[6px] rounded-full bg-white/70 px-[10px] py-[4px] text-[12px] font-semibold text-[#282923]">
             <img src={`${A}shootingstar.svg`} alt="" className="size-[14px]" />
             Analyzing…
           </span>
@@ -968,36 +992,37 @@ function ProductBadges({
   onOpen: () => void
   onOpenNotRec: (slot: NotRecSlot) => void
 }) {
-  /* Badge index matches SEARCH_ROSTER order: aero, babytrend, graco. */
+  /* One badge per product on the page: the green star on Connie's pick, a grey "why not" circle
+     on every other — including the three in the row cut off by the fold. */
   return (
     <>
-      {/* Left card — Dream On Me Aero (not recommended). */}
-      <button
-        onClick={() => onOpenNotRec('left')}
-        className="pointer-events-auto absolute flex items-center justify-center rounded-full bg-[#9d9d9d] shadow-subtle"
-        style={{ ...badgePos(0), width: 45, height: 45 }}
-        aria-label={`See why the ${NOT_REC_PRODUCTS.left.name} isn't recommended`}
-      >
-        <img src={`${A}chatcircle.svg`} alt="" className="size-[28px]" />
-      </button>
-      {/* Centre card — Baby Trend Passport Switch 6-in-1 (recommended). */}
-      <button
-        onClick={onOpen}
-        className="pointer-events-auto absolute flex items-center justify-center rounded-full bg-rating-excellent shadow-subtle"
-        style={{ ...badgePos(1), width: 45, height: 45 }}
-        aria-label={`Open Connie insights for the ${LIVE_PRODUCT}`}
-      >
-        <img src={`${A}chatblob.png`} alt="" className="size-[28px] object-contain" />
-      </button>
-      {/* Right card — Graco Ready2Grow 2.0 (not recommended). */}
-      <button
-        onClick={() => onOpenNotRec('right')}
-        className="pointer-events-auto absolute flex items-center justify-center rounded-full bg-[#9d9d9d] shadow-subtle"
-        style={{ ...badgePos(2), width: 45, height: 45 }}
-        aria-label={`See why the ${NOT_REC_PRODUCTS.right.name} isn't recommended`}
-      >
-        <img src={`${A}chatcircle.svg`} alt="" className="size-[28px]" />
-      </button>
+      {Array.from({ length: SEARCH_PRODUCT_COUNT }, (_, i) => {
+        if (i === RECOMMENDED_INDEX) {
+          return (
+            <button
+              key={i}
+              onClick={onOpen}
+              className="pointer-events-auto absolute flex items-center justify-center rounded-full bg-rating-excellent shadow-subtle"
+              style={{ ...badgePos(i), width: 45, height: 45 }}
+              aria-label={`Open Connie insights for the ${LIVE_PRODUCT}`}
+            >
+              <img src={`${A}chatblob.png`} alt="" className="size-[28px] object-contain" />
+            </button>
+          )
+        }
+        const slot = NOT_REC_BY_INDEX[i]
+        return (
+          <button
+            key={i}
+            onClick={() => onOpenNotRec(slot)}
+            className="pointer-events-auto absolute flex items-center justify-center rounded-full bg-[#9d9d9d] shadow-subtle"
+            style={{ ...badgePos(i), width: 45, height: 45 }}
+            aria-label={`See why the ${NOT_REC_PRODUCTS[slot].name} isn't recommended`}
+          >
+            <img src={`${A}chatcircle.svg`} alt="" className="size-[28px]" />
+          </button>
+        )
+      })}
     </>
   )
 }
@@ -1050,7 +1075,10 @@ export function ProductInsightsScreen() {
   const variant = (params.get('v') as Variant) || 'collapsed'
   const setVariant = (v: Variant) => setParams({ v }, { replace: true })
   /** Which grey badge opened the NOT RECOMMENDED panel — the two open different products. */
-  const notRecSlot: NotRecSlot = params.get('p') === 'right' ? 'right' : 'left'
+  const slotParam = params.get('p')
+  const notRecSlot: NotRecSlot = NOT_REC_SLOTS.includes(slotParam as NotRecSlot)
+    ? (slotParam as NotRecSlot)
+    : 'left'
   const openNotRec = (slot: NotRecSlot) => setParams({ v: 'notrec', p: slot }, { replace: true })
 
   const showRecommended = variant === 'recommended' || variant === 'expanded' || variant === 'tooltip'
@@ -1109,7 +1137,7 @@ export function ProductInsightsScreen() {
   >(() => {
     // Seed both slots from the session cache, same as the recommended card.
     const seed: Partial<Record<NotRecSlot, ProductInsightsPayload>> = {}
-    for (const slot of Object.keys(NOT_REC_PRODUCTS) as NotRecSlot[]) {
+    for (const slot of NOT_REC_SLOTS) {
       const hit = peekConnieCache({
         message: `What are the key insights on the ${NOT_REC_PRODUCTS[slot].name}?`,
         priorities: priorityKey || undefined,
@@ -1126,7 +1154,7 @@ export function ProductInsightsScreen() {
   const [notRecSettled, setNotRecSettled] = useState<Partial<Record<NotRecSlot, boolean>>>(() => {
     // A slot seeded from the cache is already settled — no shimmer on a revisit.
     const seed: Partial<Record<NotRecSlot, boolean>> = {}
-    for (const slot of Object.keys(NOT_REC_PRODUCTS) as NotRecSlot[]) {
+    for (const slot of NOT_REC_SLOTS) {
       if (
         peekConnieCache({
           message: `What are the key insights on the ${NOT_REC_PRODUCTS[slot].name}?`,

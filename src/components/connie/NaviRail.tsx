@@ -1,6 +1,13 @@
 import { useState, type CSSProperties } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { IconChat, IconHeart, IconSettings, IconHelp } from '@/components/icons'
+import {
+  IconChat,
+  IconHeart,
+  IconSettings,
+  IconHelp,
+  IconChatFilled,
+  IconHeartFilled,
+} from '@/components/icons'
 import { routes } from '@/app/routes'
 import { cn } from '@/lib/cn'
 
@@ -47,10 +54,16 @@ export function NaviRail({
   const chat = onChat ?? (() => navigate(routes.priorities))
   const saved = onSaved ?? (() => navigate(routes.decision))
 
+  /**
+   * Selected: CR green on grey, with the solid icon. Unselected stays a grey outline.
+   *
+   * The selected grey is a step darker than the hover grey — if they matched, hovering an
+   * unselected tab would give it the selected tab's chrome and only the icon would say otherwise.
+   */
   const btn = (isActive: boolean) =>
     cn(
       'relative flex size-[40px] items-center justify-center rounded-[8px] transition-colors',
-      isActive ? 'bg-[#C4E860] text-fg-inverse' : 'text-fg-secondary hover:bg-bg-tertiary',
+      isActive ? 'bg-bg-tertiary text-fg-brand' : 'text-fg-secondary hover:bg-bg-tertiary',
     )
 
   return (
@@ -65,8 +78,13 @@ export function NaviRail({
         <div className="flex items-center rounded-[8px] border-[0.5px] border-border-subtle bg-white p-[10px] shadow-[0px_0px_7.5px_0px_rgba(5,5,0,0.16)]">
           <div className="flex flex-col items-center gap-[16px]">
             <div className="flex flex-col items-center gap-[16px]">
-              <button aria-label="Chat" onClick={chat} className={btn(active === 'chat')}>
-                <IconChat size={24} />
+              <button
+                aria-label="Chat"
+                aria-current={active === 'chat' ? 'page' : undefined}
+                onClick={chat}
+                className={btn(active === 'chat')}
+              >
+                {active === 'chat' ? <IconChatFilled size={24} /> : <IconChat size={24} />}
                 {notify && (
                   <span
                     className="absolute right-[4px] top-[4px] size-[9px] rounded-full border-2 border-white"
@@ -74,12 +92,20 @@ export function NaviRail({
                   />
                 )}
               </button>
-              <button aria-label="Saved" onClick={saved} className={btn(active === 'saved')}>
-                <IconHeart size={24} />
+              <button
+                aria-label="Saved"
+                aria-current={active === 'saved' ? 'page' : undefined}
+                onClick={saved}
+                className={btn(active === 'saved')}
+              >
+                {active === 'saved' ? <IconHeartFilled size={24} /> : <IconHeart size={24} />}
               </button>
             </div>
             <div className="h-px w-full bg-border-subtle" />
             <div className="flex flex-col items-center gap-[16px]">
+              {/* Settings and Help have no destination in the prototype, so they never select.
+                  Their solid twins (IconSettingsFilled / IconHelpFilled) are ready for when
+                  they do — `active` just has no case for them yet. */}
               <button aria-label="Settings" className={btn(false)}>
                 <IconSettings size={24} />
               </button>

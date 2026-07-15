@@ -1,6 +1,6 @@
 import { AmazonChrome, AMAZON_CHROME_H } from './AmazonChrome'
 import { CHROME_H } from '@/components/browser/BrowserChrome'
-import { SEARCH_ROSTER, AMAZON_PRODUCTS, type RetailProduct } from '@/mocks/retail'
+import { SEARCH_ROSTER, SEARCH_ROW2, type RetailProduct } from '@/mocks/retail'
 
 /**
  * Amazon's search results for "strollers" — the page Connie's badges sit on.
@@ -46,10 +46,19 @@ export const SEARCH_GRID = {
   photoSize: 220,
 
   /**
-   * How far Connie's square overlay extends past the photo on every side. Used by BOTH the
-   * "analyzing" shimmer and the tour's spotlight, so the two are always the same box.
+   * How far Connie's square overlay extends past the PHOTO on every side — the tour's spotlight.
+   * The photo is narrower than its card, so there's room to spare here.
    */
   overlayPad: 12,
+
+  /**
+   * How far the "analyzing" shimmer extends past a whole CARD.
+   *
+   * Much tighter than `overlayPad`, and it has to be: the columns are 322px apart with 304px cards,
+   * so there are only 18px of gutter between them. Anything above 9 makes neighbouring shimmers
+   * touch, which reads as one smeared block rather than three products being analyzed.
+   */
+  cardOverlayPad: 6,
 
   /** Connie's badge (the green star / grey chat circles). */
   badgeSize: 45,
@@ -57,30 +66,94 @@ export const SEARCH_GRID = {
   badgeInsetX: -20,
   /** Offset from the photo's TOP edge. NEGATIVE lifts the badge above the photo. */
   badgeOffsetY: -20,
+
+  /**
+   * Full height of a first-row card — photo through the delivery line.
+   *
+   * Cards are auto-height and differ by a few tens of px (their titles clamp at 1-3 lines), so this
+   * is deliberately the TALLEST case: Connie's shimmer has to cover the longest card completely,
+   * and a uniform box per column reads as intentional where a short one reads as a clipping bug.
+   */
+  cardHeight: 490,
+
+  /** The second row, cut off by the fold. Image-only blocks — the page obviously continues. */
+  row2Top: 812,
+  row2Height: 200,
+  /** The second row's images are square and centred, like the first row's photos. */
+  row2PhotoSize: 200,
 } as const
+
+/** The six products on the page: row 1 is `lefts[i]`, row 2 is the same columns lower down. */
+export const SEARCH_PRODUCT_COUNT = 6
 
 /** Horizontal centring offset of the photo within its card. */
 const PHOTO_X = (SEARCH_GRID.cardWidth - SEARCH_GRID.photoSize) / 2
+const ROW2_PHOTO_X = (SEARCH_GRID.cardWidth - SEARCH_GRID.row2PhotoSize) / 2
 
 /**
- * The photo box of card `i` — the exact rectangle the product image occupies.
- * Everything Connie draws on a product is measured from this.
+ * The photo box of card `i` (0-5) — the exact rectangle the product image occupies.
+ * Connie's badges are measured from this, so they hug the image on both rows.
  */
 export function productSquare(i: number) {
+  const col = i % 3
+  if (i < 3) {
+    return {
+      left: SEARCH_GRID.lefts[col] + PHOTO_X,
+      top: SEARCH_GRID.cardTop,
+      width: SEARCH_GRID.photoSize,
+      height: SEARCH_GRID.photoSize,
+    }
+  }
   return {
-    left: SEARCH_GRID.lefts[i] + PHOTO_X,
-    top: SEARCH_GRID.cardTop,
-    width: SEARCH_GRID.photoSize,
-    height: SEARCH_GRID.photoSize,
+    left: SEARCH_GRID.lefts[col] + ROW2_PHOTO_X,
+    top: SEARCH_GRID.row2Top,
+    width: SEARCH_GRID.row2PhotoSize,
+    height: SEARCH_GRID.row2PhotoSize,
   }
 }
 
 /**
- * The square Connie draws over a product — the photo plus `overlayPad` on each side, so it reads
- * as covering the product rather than being clipped to it.
+ * The FULL card box of product `i` (0-5) — everything the shopper reads as "the product":
+ * photo, title, rating, price, delivery. Row 2's cards are image-only blocks, cut off by the fold.
+ */
+export function productCardBox(i: number) {
+  const col = i % 3
+  return i < 3
+    ? {
+        left: SEARCH_GRID.lefts[col],
+        top: SEARCH_GRID.cardTop,
+        width: SEARCH_GRID.cardWidth,
+        height: SEARCH_GRID.cardHeight,
+      }
+    : {
+        left: SEARCH_GRID.lefts[col],
+        top: SEARCH_GRID.row2Top,
+        width: SEARCH_GRID.cardWidth,
+        height: SEARCH_GRID.row2Height,
+      }
+}
+
+/**
+ * The box Connie's "analyzing" shimmer covers — the whole card plus `overlayPad`, so the gradient
+ * reads as covering the *product*, not just its photo.
+ */
+export function cardOverlayBox(i: number) {
+  const c = productCardBox(i)
+  const pad = SEARCH_GRID.cardOverlayPad
+  return {
+    left: c.left - pad,
+    top: c.top - pad,
+    width: c.width + pad * 2,
+    height: c.height + pad * 2,
+  }
+}
+
+/**
+ * The square Connie draws over a product's PHOTO — the photo plus `overlayPad` on each side.
  *
- * The "analyzing" shimmer and the guided tour's spotlight BOTH use this, which is the only way
- * they stay the same size as each other.
+ * This is the guided tour's spotlight: the tour points at one product, so it frames the photo.
+ * The insights shimmer uses `cardOverlayBox` instead, because "analyzing" acts on the whole
+ * product (title, rating, price and all), not just its picture.
  */
 export function overlayBox(i: number) {
   const photo = productSquare(i)
@@ -286,6 +359,8 @@ function Sidebar() {
 }
 
 /* ------------------------------------------------------------------ right rail */
+/** Maya's cart, empty — she hasn't bought anything yet, which is the whole point of the story.
+ *  So the rail shows Amazon's empty-cart state rather than a subtotal and line items. */
 function RightRail() {
   return (
     <div className="absolute w-[196px]" style={{ left: 1224, top: 236 }}>
@@ -294,31 +369,15 @@ function RightRail() {
           <span className="text-[14px] font-bold lowercase tracking-[-0.5px] text-[#131921]">amazon</span>
           <span className="text-[9px] text-[#565959]">▼</span>
         </div>
-        <p className="text-[13px] text-[#0F1111]">3 items</p>
-        <p className="text-[16px] font-bold text-[#B12704]">$50.22</p>
+        <p className="text-[13px] text-[#0F1111]">0 items</p>
+        <p className="text-[16px] font-bold text-[#0F1111]">$0.00</p>
         <p className="text-center text-[12px] leading-[16px] text-[#0F1111]">
-          Get FREE Overnight delivery with $2.78 more of eligible items.{' '}
-          <span className="text-[#007185]">Find eligible items ›</span>
+          Your cart is empty. <span className="text-[#007185]">Shop today’s deals ›</span>
         </p>
         <div className="mt-[4px] flex h-[27px] w-full items-center justify-center rounded-full border border-[#8d8d8d] bg-white text-[12px] text-[#0F1111]">
           Go to Cart
         </div>
       </div>
-      {[
-        { label: '$28.00', bg: '#efe7dc' },
-        { label: '$7.22', bg: '#e8d9c8' },
-        { label: '$15.00', bg: '#f1e6e2' },
-      ].map((s, i) => (
-        <div key={i} className="mt-[8px] flex flex-col items-center gap-[5px] border border-[#e7e7e7] bg-white p-[10px]">
-          <div className="h-[70px] w-full rounded-[3px]" style={{ background: s.bg }} />
-          <p className="text-[14px] font-bold text-[#0F1111]">{s.label}</p>
-          <div className="flex h-[24px] w-full items-center justify-between rounded-full border border-[#f0c14b] bg-white px-[8px] text-[12px]">
-            <span>🗑</span>
-            <span>1</span>
-            <span>+</span>
-          </div>
-        </div>
-      ))}
     </div>
   )
 }
@@ -353,12 +412,18 @@ export function AmazonSearchPage() {
         <ProductCard key={p.id} p={p} left={SEARCH_GRID.lefts[i]} />
       ))}
 
-      {/* The next row, cut off by the fold — the page obviously continues. */}
-      {[AMAZON_PRODUCTS.evenflo, AMAZON_PRODUCTS.joie, AMAZON_PRODUCTS.aero].map((p, i) => (
+      {/* The next row, cut off by the fold — the page obviously continues. Connie has an opinion
+          on these too, so they're laid out from the same grid its badges/shimmer measure from. */}
+      {SEARCH_ROW2.map((p, i) => (
         <div
           key={`row2-${p.id}`}
           className="absolute flex items-center justify-center bg-white"
-          style={{ left: SEARCH_GRID.lefts[i], top: 812, width: SEARCH_GRID.cardWidth, height: 200 }}
+          style={{
+            left: SEARCH_GRID.lefts[i],
+            top: SEARCH_GRID.row2Top,
+            width: SEARCH_GRID.cardWidth,
+            height: SEARCH_GRID.row2Height,
+          }}
         >
           <img src={p.img} alt="" className="max-h-full max-w-full object-contain" />
         </div>

@@ -239,6 +239,33 @@ export function ChipRow({ children }: { children: ReactNode }) {
  * field — a pill that only writes text into the box below it is a button pretending to be a
  * conversation.
  */
+/** How long each half of the placeholder cross-fade takes. Matches `duration-200` below. */
+const PLACEHOLDER_FADE_MS = 200
+
+/**
+ * Holds `text` steady through a fade-out, swaps it while invisible, then fades the new text in.
+ *
+ * The suggested action changes as the conversation moves, and swapping the string outright made it
+ * pop — a jump-cut in a panel where everything else eases. Returning the *previous* text until the
+ * fade-out lands is the whole point: it's what makes the change read as one motion.
+ */
+function useCrossFade(text: string) {
+  const [shown, setShown] = useState(text)
+  const [visible, setVisible] = useState(true)
+
+  useEffect(() => {
+    if (text === shown) return
+    setVisible(false)
+    const t = window.setTimeout(() => {
+      setShown(text)
+      setVisible(true)
+    }, PLACEHOLDER_FADE_MS)
+    return () => window.clearTimeout(t)
+  }, [text, shown])
+
+  return { shown, visible }
+}
+
 export function ChatComposer({
   value,
   onChange,
@@ -252,6 +279,9 @@ export function ChatComposer({
   placeholder: string
   disabled?: boolean
 }) {
+  /* A native ::placeholder can't be transitioned, so the prompt is our own element layered over an
+     empty input — same position and type, but it can actually fade. */
+  const { shown, visible } = useCrossFade(placeholder)
   return (
     /* The outline is a live yellow-green gradient panning behind the field — the same palette as
        every other "Connie is working" moment (the shimmer, the verify card), so the composer reads
@@ -266,16 +296,30 @@ export function ChatComposer({
       }}
     >
       <div className="flex w-full items-center gap-[10px] rounded-[14.5px] bg-bg-primary py-[8px] pl-[16px] pr-[8px]">
-        <input
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && value.trim()) onSend?.()
-          }}
-          placeholder={placeholder}
-          aria-label="Message Connie"
-          className="min-w-0 flex-1 bg-transparent text-[15px] leading-[24px] text-fg-primary outline-none placeholder:text-fg-secondary"
-        />
+        <div className="relative min-w-0 flex-1">
+          <input
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && value.trim()) onSend?.()
+            }}
+            aria-label="Message Connie"
+            placeholder={placeholder}
+            className="w-full bg-transparent text-[15px] leading-[24px] text-fg-primary outline-none placeholder:text-transparent"
+          />
+          {/* The visible prompt. Hidden the moment she types, and aria-hidden because the input's
+              own `placeholder` still carries this text for assistive tech. */}
+          {!value && (
+            <span
+              aria-hidden
+              className={`pointer-events-none absolute inset-0 flex items-center truncate text-[15px] leading-[24px] text-fg-secondary transition-opacity duration-200 ${
+                visible ? 'opacity-100' : 'opacity-0'
+              }`}
+            >
+              {shown}
+            </span>
+          )}
+        </div>
         <button
           onClick={onSend}
           disabled={disabled || !value.trim()}

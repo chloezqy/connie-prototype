@@ -224,9 +224,10 @@ export function CollaborationScreen() {
   const markShared = useCollabStore((s) => s.markShared)
   const go = (s: Stage) => setParams({ stage: s }, { replace: true })
 
-  const [listName, setListName] = useState('Strollers for the twins')
-  /** Empty: the shopper types the name and commits it to a pill, the same as any share sheet.
-   *  Pre-filling "Alex" put words in her mouth and skipped the only interaction on the screen. */
+  /** Both empty for the same reason: naming the list and choosing who sees it are the shopper's
+   *  calls, not ours. Pre-filling either puts words in her mouth and skips the only interactions
+   *  on the screen. "Create" stays disabled until she's done both. */
+  const [listName, setListName] = useState('')
   const [recipients, setRecipients] = useState<string[]>([])
 
   /* ----- Shared list ----- */
@@ -241,7 +242,11 @@ export function CollaborationScreen() {
           <div className="flex w-full flex-col gap-[6px]">
             <p className="text-eyebrow font-semibold uppercase text-fg-brand">Your shared list</p>
             <div className="flex w-full items-center justify-between gap-[12px]">
-              <p className="flex-1 text-title1 font-semibold text-fg-primary">{listName}</p>
+              {/* The share step can't be completed without a name, so this only falls back when
+                  the shared stage is opened directly from the flow menu. */}
+              <p className="flex-1 text-title1 font-semibold text-fg-primary">
+                {listName.trim() || 'Untitled list'}
+              </p>
               <button aria-label="Edit list" onClick={() => go('share')}>
                 <img alt="" src={A.edit} className="size-[24px]" />
               </button>

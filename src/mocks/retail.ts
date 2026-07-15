@@ -128,11 +128,18 @@ export const AMAZON_PRODUCTS: Record<string, RetailProduct> = {
   },
 }
 
-/** The three strollers on the Amazon search page, left to right. */
+/** The three strollers in the Amazon search page's first row, left to right. */
 export const SEARCH_ROSTER: RetailProduct[] = [
   AMAZON_PRODUCTS.aero,
   AMAZON_PRODUCTS.babytrend,
   AMAZON_PRODUCTS.graco,
+]
+
+/** The second row, cut off by the fold. Connie badges these too — all three are passes. */
+export const SEARCH_ROW2: RetailProduct[] = [
+  AMAZON_PRODUCTS.evenflo,
+  AMAZON_PRODUCTS.joie,
+  AMAZON_PRODUCTS.aero,
 ]
 
 /** The product whose detail page the shopper opens — Connie's #1 pick, and the one she saves. */

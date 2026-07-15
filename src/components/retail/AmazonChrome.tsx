@@ -4,7 +4,7 @@ import type { ReactNode } from 'react'
  * Amazon's own page chrome — the dark header and nav that sit above every Amazon page.
  *
  * Drawn to match the baked screenshots these pages replace (`insights-bg.png`,
- * `annot-backdrop.png`, `pp-backdrop.png`), down to the "Deliver to Isabel / Pittsburgh 15213"
+ * `annot-backdrop.png`, `pp-backdrop.png`), down to the "Deliver to Maya / Pittsburgh 15213"
  * and the ochre search button.
  */
 
@@ -50,7 +50,7 @@ export function AmazonHeader({ query }: { query: string }) {
         <svg width="14" height="14" viewBox="0 0 24 24" fill="#fff" className="mb-[2px]" aria-hidden>
           <path d="M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z" />
         </svg>
-        <HeaderCell top="Deliver to Isabel" bottom="Pittsburgh 15213" />
+        <HeaderCell top="Deliver to Maya" bottom="Pittsburgh 15213" />
       </div>
 
       {/* Search */}
@@ -77,7 +77,7 @@ export function AmazonHeader({ query }: { query: string }) {
           <span className="text-[12px] font-bold text-white">EN</span>
           <span className="text-[8px] text-[#ccc]">▼</span>
         </div>
-        <HeaderCell top="Hello, Isabel" bottom={<>Account &amp; Lists ▾</>} />
+        <HeaderCell top="Hello, Maya" bottom={<>Account &amp; Lists ▾</>} />
         <HeaderCell top="Returns" bottom="& Orders" />
         <div className="flex shrink-0 items-end gap-[2px] px-[8px]">
           <div className="relative">

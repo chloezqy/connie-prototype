@@ -17,11 +17,12 @@ import {
   IconInfo,
   IconStar,
   IconShare,
+  IconPlus,
+  IconX,
   IconCaretLeft,
   IconCaretRight,
   IconShieldCheck,
   IconTag,
-  IconSparkle,
   IconHandTap,
   IconLeaf,
 } from '@/components/icons'
@@ -40,6 +41,7 @@ const asset = {
   commTiktok: '/figma/comm-tiktok.svg',
   commPinterest: '/figma/comm-pinterest.svg',
   commGoogle: '/figma/comm-google.svg',
+  commReviewSites: '/figma/comm-reviewsites.svg',
   permReader: '/figma/perm-reader.svg',
   permNote: '/figma/perm-note.svg',
   permBlock: '/figma/perm-block.svg',
@@ -386,7 +388,7 @@ export function InstallScreen() {
 
             {/* Overview */}
             <div className="absolute" style={{ left: 133, top: 711, width: 996 }}>
-              <p className="font-serif text-[26.307px] font-bold text-black">Overview</p>
+              <p className="text-[26.307px] font-bold text-black">Overview</p>
               <div className="mt-[30px] flex flex-col gap-[17px] text-[16px] text-black">
                 <p className="leading-[24px]">Shop confidently with Consumer Reports, right in your browser.</p>
                 <p className="leading-[22px]">
@@ -540,14 +542,7 @@ export function MemberCheckScreen() {
         </p>
         <div className="flex w-full flex-col gap-[12px]">
           <PrimaryButton onClick={() => navigate(routes.login)}>Log in to CR</PrimaryButton>
-          <OutlineButton
-            onClick={() => {
-              setMember(true)
-              navigate(routes.promise)
-            }}
-          >
-            Create account
-          </OutlineButton>
+          <OutlineButton onClick={() => navigate(routes.signup)}>Create account</OutlineButton>
           <button
             onClick={() => {
               setMember(false)
@@ -632,7 +627,80 @@ export function LoginScreen() {
         >
           Log in
         </PrimaryButton>
-        <OutlineButton onClick={() => navigate(routes.promise)}>Continue with Google</OutlineButton>
+      </Panel>
+    </FigmaFrame>
+  )
+}
+
+/* M2 — Create a CR account.
+ * The mirror of M1: same panel, same field styling. Signing up asks for the two things a new
+ * account genuinely needs (a name to greet her by, and credentials), and nothing it doesn't. */
+function UserIcon() {
+  return (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
+      <circle cx="12" cy="8" r="4" />
+      <path d="M4 20c0-4 3.6-6 8-6s8 2 8 6" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+export function SignupScreen() {
+  const navigate = useNavigate()
+  const setMember = useJourneyStore((s) => s.setMember)
+  /** Unchecked by default — agreeing to terms is the shopper's action to take, not a default. */
+  const [agreed, setAgreed] = useState(false)
+  return (
+    <FigmaFrame>
+      <OnboardingBackdrop />
+      <Panel gap={18} onClose={() => navigate(routes.search)}>
+        <p className="text-title1 font-semibold text-fg-primary">
+          Create your CR account to get the most out of Connie.
+        </p>
+        <p className="w-full text-body text-fg-secondary">
+          Your saved products, ratings, and priorities sync across every device you shop on.
+        </p>
+        <Field icon={<UserIcon />} placeholder="Full name" type="text" hint="How Connie will greet you" />
+        <Field icon={<MailIcon />} placeholder="Email" type="email" hint="We’ll send you a confirmation to this email" />
+        <Field icon={<LockIcon />} placeholder="Password" type="password" hint="Must contain 8 characters" />
+        <Field
+          icon={<LockIcon />}
+          placeholder="Confirm password"
+          type="password"
+          hint="Re-enter your password to confirm"
+        />
+        <button
+          onClick={() => setAgreed(!agreed)}
+          role="checkbox"
+          aria-checked={agreed}
+          className="flex w-full items-start gap-[10px] text-left"
+        >
+          <span
+            className={`mt-[2px] flex size-[20px] shrink-0 items-center justify-center rounded-[4px] border-2 ${
+              agreed ? 'border-brand bg-brand text-fg-inverse' : 'border-border-strong'
+            }`}
+          >
+            {agreed && <IconCheck size={13} />}
+          </span>
+          <span className="text-[14px] leading-[20px] text-fg-secondary">
+            I agree to CR’s <span className="text-fg-brand underline">Terms of Use</span> and{' '}
+            <span className="text-fg-brand underline">Privacy Policy</span>.
+          </span>
+        </button>
+        <PrimaryButton
+          disabled={!agreed}
+          onClick={() => {
+            setMember(true)
+            navigate(routes.promise)
+          }}
+        >
+          Create account
+        </PrimaryButton>
+        <button
+          onClick={() => navigate(routes.login)}
+          className="w-full text-center text-body text-fg-brand underline"
+        >
+          Already have an account? Log in
+        </button>
       </Panel>
     </FigmaFrame>
   )
@@ -684,14 +752,21 @@ export function PromiseScreen() {
 }
 
 /* N4a — Survey · Communities. Nothing is pre-selected: these are the shopper's answers to give. */
-const COMMUNITIES = [
+const COMMUNITIES: { name: string; icon: string; round: boolean }[] = [
   { name: 'Instagram', icon: asset.commInstagram, round: true },
   { name: 'Reddit', icon: asset.commReddit, round: false },
   { name: 'YouTube', icon: asset.commYoutube, round: false },
   { name: 'Tiktok', icon: asset.commTiktok, round: false },
   { name: 'Pinterest', icon: asset.commPinterest, round: false },
   { name: 'Online blogs', icon: asset.commGoogle, round: false },
+  { name: 'Review sites', icon: asset.commReviewSites, round: false },
 ]
+
+/** The chip styling every option on this question shares — the named ones and the custom ones. */
+const chipBase =
+  'flex items-center justify-center gap-[8px] overflow-clip rounded-pill bg-bg-primary px-[18px] py-[11px]'
+const chipOn = 'border-2 border-border-black'
+const chipOff = 'border border-border-subtle'
 
 /** The green step eyebrow survives only on the two survey questions, where it's a progress cue. */
 function StepEyebrow({ children }: { children: ReactNode }) {
@@ -702,14 +777,32 @@ export function SurveyCommunitiesScreen() {
   const navigate = useNavigate()
   const selected = usePreferences((s) => s.sources)
   const toggle = usePreferences((s) => s.toggleSource)
+
+  /** Anything she typed under "Other" — i.e. a chosen source that isn't one of the named ones. */
+  const named = COMMUNITIES.map((c) => c.name)
+  const custom = selected.filter((s) => !named.includes(s))
+
+  /* "Other" is a disclosure, not an answer: it opens the field. It stays open while there are
+     custom sources, because closing it would hide the chips it created. */
+  const [otherOpen, setOtherOpen] = useState(custom.length > 0)
+  const [draft, setDraft] = useState('')
+
+  const addCustom = () => {
+    const value = draft.trim()
+    if (!value || selected.includes(value)) return setDraft('')
+    toggle(value)
+    setDraft('')
+  }
+
   const canContinue = selected.length > 0
+
   return (
     <FigmaFrame>
       <OnboardingBackdrop />
       <Panel gap={24} onClose={() => navigate(routes.search)}>
         <div className="flex w-full flex-col gap-[8px]">
           <StepEyebrow>Question 1 of 2</StepEyebrow>
-          <p className="text-title1 font-semibold text-fg-primary">Who do you trust for honest takes?</p>
+          <p className="text-title1 font-semibold text-fg-primary">Where do you go for second opinions?</p>
         </div>
         <div className="flex w-full flex-col gap-[15px]">
           <p className="w-full text-body text-fg-primary">
@@ -720,9 +813,7 @@ export function SurveyCommunitiesScreen() {
               <button
                 key={c.name}
                 onClick={() => toggle(c.name)}
-                className={`flex items-center justify-center gap-[8px] overflow-clip rounded-pill bg-bg-primary px-[18px] py-[11px] ${
-                  selected.includes(c.name) ? 'border-2 border-border-black' : 'border border-border-subtle'
-                }`}
+                className={`${chipBase} ${selected.includes(c.name) ? chipOn : chipOff}`}
               >
                 <img
                   alt=""
@@ -732,7 +823,55 @@ export function SurveyCommunitiesScreen() {
                 <span className="whitespace-nowrap text-body text-fg-primary">{c.name}</span>
               </button>
             ))}
+
+            {/* Whatever she named under "Other" — same chips as the rest, tap to remove. */}
+            {custom.map((name) => (
+              <button
+                key={name}
+                onClick={() => toggle(name)}
+                aria-label={`Remove ${name}`}
+                className={`${chipBase} ${chipOn}`}
+              >
+                <span className="whitespace-nowrap text-body text-fg-primary">{name}</span>
+                <IconX size={14} className="shrink-0 text-fg-secondary" />
+              </button>
+            ))}
+
+            <button
+              onClick={() => setOtherOpen((o) => !o)}
+              aria-expanded={otherOpen}
+              className={`${chipBase} ${otherOpen ? chipOn : chipOff}`}
+            >
+              <IconPlus size={18} className="shrink-0 text-fg-primary" />
+              <span className="whitespace-nowrap text-body text-fg-primary">Other</span>
+            </button>
           </div>
+
+          {otherOpen && (
+            <div className="flex w-full flex-col gap-[8px]">
+              <div className="flex w-full items-center gap-[8px]">
+                <input
+                  value={draft}
+                  autoFocus
+                  onChange={(e) => setDraft(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && addCustom()}
+                  placeholder="Which one? e.g. Wirecutter, a parenting forum…"
+                  aria-label="Add another source"
+                  className="h-[44px] min-w-0 flex-1 rounded-[8px] border border-border-strong bg-bg-primary px-[14px] text-body text-fg-primary outline-none placeholder:text-fg-secondary focus:border-brand"
+                />
+                <button
+                  onClick={addCustom}
+                  disabled={!draft.trim()}
+                  className="flex h-[44px] shrink-0 items-center justify-center rounded-pill bg-brand px-[18px] text-body font-semibold text-fg-inverse disabled:bg-bg-disabled"
+                >
+                  Add
+                </button>
+              </div>
+              <p className="text-utility text-fg-secondary">
+                Add as many as you like — press Enter after each.
+              </p>
+            </div>
+          )}
         </div>
         <PrimaryButton disabled={!canContinue} onClick={() => navigate(routes.surveyPriorities)}>
           Next
@@ -747,7 +886,6 @@ type PriorityIcon = (p: { size?: number; className?: string }) => JSX.Element
 const PRIORITIES: { label: string; Icon: PriorityIcon }[] = [
   { label: 'Long-term reliability', Icon: IconShieldCheck },
   { label: 'Value for price', Icon: IconTag },
-  { label: 'Aesthetics', Icon: IconSparkle },
   { label: 'Ease of use', Icon: IconHandTap },
   { label: 'Sustainability', Icon: IconLeaf },
 ]
@@ -756,6 +894,23 @@ export function SurveyPrioritiesScreen() {
   const navigate = useNavigate()
   const selected = usePreferences((s) => s.preferences)
   const toggle = usePreferences((s) => s.togglePreference)
+
+  /** Anything she typed under "Other" — a chosen value that isn't one of the named ones. */
+  const named = PRIORITIES.map((p) => p.label)
+  const custom = selected.filter((s) => !named.includes(s))
+
+  /* Same disclosure as Q1: "Other" opens the field rather than being an answer itself, and stays
+     open while there are custom values, because closing it would hide the chips it created. */
+  const [otherOpen, setOtherOpen] = useState(custom.length > 0)
+  const [draft, setDraft] = useState('')
+
+  const addCustom = () => {
+    const value = draft.trim()
+    if (!value || selected.includes(value)) return setDraft('')
+    toggle(value)
+    setDraft('')
+  }
+
   return (
     <FigmaFrame>
       <OnboardingBackdrop />
@@ -766,23 +921,22 @@ export function SurveyPrioritiesScreen() {
             What do you usually care about when shopping?
           </p>
         </div>
-        <div className="flex w-full flex-col gap-[20px]">
-          <div className="flex w-full flex-col gap-[4px]">
+        <div className="flex w-full flex-col gap-[15px]">
+          <div className="flex w-full flex-col">
             <p className="w-full text-body text-fg-primary">
               What are some values that show up on every purchase? Pick as many as you like.
             </p>
-            <p className="w-full text-[14px] leading-[20px] text-fg-secondary">
-              You can add more or tweak them later in the chat.
-            </p>
           </div>
-          <div className="flex w-full flex-wrap gap-[8px]">
+          {/* Tight padding on purpose: it's what keeps the pills to two rows inside the 520px
+              panel instead of orphaning the last one. */}
+          <div className="flex w-full flex-wrap gap-[9px]">
             {PRIORITIES.map(({ label, Icon }) => {
               const on = selected.includes(label)
               return (
                 <button
                   key={label}
                   onClick={() => toggle(label)}
-                  className={`flex h-[46px] items-center justify-center gap-[8px] overflow-clip rounded-pill bg-bg-primary px-[18px] py-[11px] ${
+                  className={`flex h-[46px] items-center justify-center gap-[6px] overflow-clip rounded-pill bg-bg-primary px-[12px] py-[11px] ${
                     on ? 'border-2 border-border-black' : 'border border-border-subtle'
                   }`}
                 >
@@ -791,7 +945,57 @@ export function SurveyPrioritiesScreen() {
                 </button>
               )
             })}
+
+            {/* Whatever she named under "Other" — same chips as the rest, tap to remove. */}
+            {custom.map((label) => (
+              <button
+                key={label}
+                onClick={() => toggle(label)}
+                aria-label={`Remove ${label}`}
+                className="flex h-[46px] items-center justify-center gap-[6px] overflow-clip rounded-pill border-2 border-border-black bg-bg-primary px-[12px] py-[11px]"
+              >
+                <span className="whitespace-nowrap text-body text-fg-primary">{label}</span>
+                <IconX size={14} className="shrink-0 text-fg-secondary" />
+              </button>
+            ))}
+
+            <button
+              onClick={() => setOtherOpen((o) => !o)}
+              aria-expanded={otherOpen}
+              className={`flex h-[46px] items-center justify-center gap-[6px] overflow-clip rounded-pill bg-bg-primary px-[12px] py-[11px] ${
+                otherOpen ? 'border-2 border-border-black' : 'border border-border-subtle'
+              }`}
+            >
+              <IconPlus size={18} className="shrink-0 text-fg-primary" />
+              <span className="whitespace-nowrap text-body text-fg-primary">Other</span>
+            </button>
           </div>
+
+          {otherOpen && (
+            <div className="flex w-full flex-col gap-[8px]">
+              <div className="flex w-full items-center gap-[8px]">
+                <input
+                  value={draft}
+                  autoFocus
+                  onChange={(e) => setDraft(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && addCustom()}
+                  placeholder="What else? e.g. Safety, Resale value…"
+                  aria-label="Add another value"
+                  className="h-[44px] min-w-0 flex-1 rounded-[8px] border border-border-strong bg-bg-primary px-[14px] text-body text-fg-primary outline-none placeholder:text-fg-secondary focus:border-brand"
+                />
+                <button
+                  onClick={addCustom}
+                  disabled={!draft.trim()}
+                  className="flex h-[44px] shrink-0 items-center justify-center rounded-pill bg-brand px-[18px] text-body font-semibold text-fg-inverse disabled:bg-bg-disabled"
+                >
+                  Add
+                </button>
+              </div>
+              <p className="text-utility text-fg-secondary">
+                Add as many as you like — press Enter after each.
+              </p>
+            </div>
+          )}
         </div>
         <PrimaryButton onClick={() => navigate(routes.permissions)}>Next</PrimaryButton>
       </Panel>
