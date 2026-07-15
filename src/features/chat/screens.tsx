@@ -2,7 +2,8 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { FigmaFrame } from '@/layouts/FigmaFrame'
 import { routes } from '@/app/routes'
-import { callConnie } from '@/api/connieClient'
+import { callConnie, type ChatTurn } from '@/api/connieClient'
+import { usePreferences, preferencesToPriorities } from '@/store/usePreferences'
 import {
   isChat,
   isDecisionSupport,
@@ -28,6 +29,37 @@ import {
 /* Connie chat — a live, interactive conversation with the Connie backend.
    Uses the shared ChatPanel kit, so it's the same interface as preference inference and the
    post-purchase check-in. */
+
+/**
+ * Flatten a Connie response into one line of plain text for the conversation history.
+ *
+ * The agent is stateless, so follow-ups only work if we hand its own last answer back to it. But we
+ * must NOT hand back the raw JSON payload: it's huge (a decision_support blob is thousands of
+ * tokens), and a history full of JSON confuses the prompt's CLASSIFICATION GUARD into thinking the
+ * next turn is another structured request. A short summary carries the referents ("the cheaper
+ * one", "it") without either problem.
+ */
+function summarizeForHistory(res: ConnieResponse): string {
+  if (isChat(res)) return res.chat.message
+  if (isDecisionSupport(res)) {
+    const d = res.decision_support
+    const ranked = d.products
+      .map((p) => `${p.rank_label} ${p.product_name} (${p.price})`)
+      .join('; ')
+    return `Ranked the strollers: ${ranked}.${d.cr_verdict ? ` Verdict: ${d.cr_verdict}` : ''}`
+  }
+  if (isProductInsights(res)) {
+    const pi = res.product_insights
+    const labels = pi.insights.map((i) => i.label).join(', ')
+    return `Gave insights on the ${pi.product_name} (${pi.verdict}): ${labels}.`
+  }
+  if (isPriorityInference(res)) {
+    const p = res.priority_inference
+    return `${p.message} Suggested priorities: ${p.suggested_priorities.join(', ')}.`
+  }
+  if (isPostPurchase(res)) return res.post_purchase.message
+  return 'Annotated the claims on the product page.'
+}
 
 /** Renders one live Connie response into the thread, reusing the designed bubbles/chips. */
 function ConnieReply({ res }: { res: ConnieResponse }) {
@@ -124,6 +156,11 @@ export function ChatScreen() {
   ])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
+  // Plain-text transcript, sent back with each turn so Connie can resolve follow-ups. Kept
+  // separate from `messages` (which holds React nodes) — this is what goes over the wire.
+  const [history, setHistory] = useState<ChatTurn[]>([])
+  // Chat previously ignored onboarding priorities entirely — every other screen sends them.
+  const priorityKey = preferencesToPriorities(usePreferences((s) => s.preferences))
   const idRef = useRef(1)
 
   const send = async () => {
@@ -133,7 +170,10 @@ export function ChatScreen() {
     setInput('')
     setLoading(true)
     try {
-      const res = await callConnie({ message: text })
+      // Send the transcript + onboarding priorities so Connie can resolve follow-ups ("why not the
+      // cheaper one?"). Deliberately NOT cached — the same question later in a conversation should
+      // get a fresh answer, and the history makes each turn unique anyway.
+      const res = await callConnie({ message: text, priorities: priorityKey || undefined, history })
       setMessages((m) => [
         ...m,
         {
@@ -144,6 +184,12 @@ export function ChatScreen() {
             </ConnieGroup>
           ),
         },
+      ])
+      // Record a plain-text summary of this turn for the next request's context.
+      setHistory((h) => [
+        ...h,
+        { role: 'user', text },
+        { role: 'connie', text: summarizeForHistory(res) },
       ])
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'unknown error'

@@ -27,26 +27,68 @@ const env = (import.meta as unknown as { env?: Record<string, string> }).env ?? 
 const LANGFLOW_BASE_URL = env.VITE_LANGFLOW_URL ?? '/langflow';
 const API_KEY = env.VITE_LANGFLOW_API_KEY; // only needed if you bypass the proxy
 
-/** Imported flow id (stable as long as you edit in place rather than re-importing). */
-const FLOW_ID = '5c8974c3-52ba-4b7e-b806-9ce2375b127a';
+/**
+ * Flow id. Re-importing a flow into a different Langflow instance changes this, so it's
+ * configurable per environment:
+ *   - Local dev (default): the flow on your laptop's Langflow.
+ *   - Vercel live demo: set VITE_FLOW_ID to the CLOUD Langflow's flow id (it points at the VM).
+ * Not secret — safe to bake into the browser build.
+ */
+const FLOW_ID = env.VITE_FLOW_ID ?? '5c8974c3-52ba-4b7e-b806-9ce2375b127a';
+
+/** One prior turn of a conversation, as plain text. Connie's turns are SUMMARIES, not raw JSON —
+ *  feeding whole payloads back in would blow up the token count and confuse classification. */
+export interface ChatTurn {
+  role: 'user' | 'connie';
+  text: string;
+}
 
 export interface CallConnieOptions {
   /** The user's message / request. Drives which response_type Connie returns. */
   message: string;
   /** Comma-separated priorities from onboarding, e.g. "Safety, Durability". Optional. */
   priorities?: string;
+  /**
+   * Prior turns, oldest first. Used by the Chat screen so follow-ups resolve ("why not the cheaper
+   * one?"). The agent itself is stateless — Langflow holds no memory — so history is delivered in
+   * the message, exactly like priorities. Only the last few turns are sent.
+   */
+  history?: ChatTurn[];
   signal?: AbortSignal;
 }
 
-/** Prefix the message with priorities so the prompt's override rule picks them up. */
-function buildInput(message: string, priorities?: string): string {
+/** How many prior turns to send. Enough to resolve a reference, few enough to stay cheap. */
+const HISTORY_TURNS = 6;
+
+/** Prefix the message with priorities + recent history so the prompt's rules pick them up.
+ *  The NEW message always comes last, so the agent classifies on that and not on the history. */
+function buildInput(message: string, priorities?: string, history?: ChatTurn[]): string {
+  const parts: string[] = [];
+
   const p = priorities?.trim();
-  return p ? `[User priorities: ${p}]\n\n${message}` : message;
+  if (p) parts.push(`[User priorities: ${p}]`);
+
+  const recent = (history ?? []).slice(-HISTORY_TURNS);
+  if (recent.length > 0) {
+    const lines = recent
+      .map((t) => `${t.role === 'user' ? 'User' : 'Connie'}: ${t.text}`)
+      .join('\n');
+    parts.push(
+      '[Conversation so far — context only. Use it to resolve references such as "it", ' +
+        '"that one", or "the cheaper one". Do NOT answer these earlier turns again; ' +
+        'respond only to the new message below.\n' +
+        lines +
+        '\n]',
+    );
+  }
+
+  parts.push(message);
+  return parts.join('\n\n');
 }
 
 /** Call the Connie Langflow flow and return a typed, parsed response. */
 export async function callConnie(opts: CallConnieOptions): Promise<ConnieResponse> {
-  const { message, priorities, signal } = opts;
+  const { message, priorities, history, signal } = opts;
 
   const res = await fetch(`${LANGFLOW_BASE_URL}/api/v1/run/${FLOW_ID}?stream=false`, {
     method: 'POST',
@@ -55,7 +97,7 @@ export async function callConnie(opts: CallConnieOptions): Promise<ConnieRespons
       ...(API_KEY ? { 'x-api-key': API_KEY } : {}),
     },
     body: JSON.stringify({
-      input_value: buildInput(message, priorities),
+      input_value: buildInput(message, priorities, history),
       input_type: 'chat',
       output_type: 'chat',
     }),
@@ -94,7 +136,10 @@ export async function callConnie(opts: CallConnieOptions): Promise<ConnieRespons
 const inFlight = new Map<string, Promise<ConnieResponse>>();
 const resolved = new Map<string, ConnieResponse>();
 
-const cacheKey = (o: CallConnieOptions) => `${o.priorities?.trim() ?? ''}::${o.message}`;
+// History is part of the key: the same question after a different conversation is a different
+// question. (Chat doesn't use the cache anyway, but a stale hit here would be a nasty bug.)
+const cacheKey = (o: CallConnieOptions) =>
+  `${o.priorities?.trim() ?? ''}::${(o.history ?? []).map((t) => `${t.role}:${t.text}`).join('|')}::${o.message}`;
 
 /** Already-resolved response for this exact request, or null. Synchronous — safe in render/init. */
 export function peekConnieCache(opts: CallConnieOptions): ConnieResponse | null {
