@@ -48,6 +48,13 @@ const asset = {
   installSoftStar: '/figma/install-softstar.svg',
   installSealCheck: '/figma/install-sealcheck.svg',
   installMedal: '/figma/install-medal.svg',
+  installThumb1: '/figma/install-thumb-1.png',
+  installThumb2: '/figma/install-thumb-2.png',
+  installThumb3: '/figma/install-thumb-3.png',
+  installWebstoreNav: '/figma/install-webstore-nav.png',
+  installPromo: '/figma/install-promo.png',
+  cwsIcon: '/figma/cws-icon.png',
+  cSquare: '/figma/C_square.png',
 }
 
 /** The query the shopper runs once onboarding is done. */
@@ -141,6 +148,10 @@ const TABS = (activeTitle: string) => [
 ]
 
 /* ---------- N0 · Chrome Web Store install ----------
+ * The full Chrome Web Store listing, reproduced frame-for-frame from Figma (N0). The browser
+ * chrome stays pinned at the top; the listing itself scrolls, so the whole page — hero, gallery,
+ * and the Overview copy below the fold — is reachable.
+ *
  * Installing an extension doesn't navigate you anywhere: you stay on the listing, the button
  * flips to "Added", and Chrome drops the icon into the toolbar. So the story here is
  * click Add → see it added → open a new tab yourself. */
@@ -157,6 +168,23 @@ export function InstallScreen() {
     return () => window.clearTimeout(t)
   }, [toast])
   const metaText = 'font-medium text-[16.337px]'
+
+  /** The gallery images, in Figma order: the Connie promo panel then the three screenshots.
+   *  The gallery shows two at a time; the arrows (and thumbnails) slide the pair. */
+  const gallery = [asset.installPromo, asset.installThumb1, asset.installThumb2, asset.installThumb3]
+  const [galleryStart, setGalleryStart] = useState(0)
+  const maxStart = gallery.length - 2
+  const showPair = (start: number) => setGalleryStart(Math.max(0, Math.min(maxStart, start)))
+
+  /** The Overview copy, verbatim from Figma. Feature rows carry an emoji title + a description. */
+  const features = [
+    ['🔎 Get instant product insights', "See CR's expert ratings and real owner sentiment the moment you land on a product page. No searching required."],
+    ['📝 Spot the claims that matter', 'Our inline annotations flag misleading marketing claims right where they appear, so you know when promised features actually holds up.'],
+    ['✅ Decide with confidence', "Tell us what matters most to you. Whether that's price, durability, safety, or all three. Connie ranks your options based on your priorities, not the retailer's."],
+    ['⚖️ CR data meets real opinions', "We reconcile Consumer Reports' rigorous testing with what actual owners are saying, so you get the full picture, not just a star rating."],
+    ['🛍 Works where you shop', 'Connie surfaces insights on the store sites you already use: no extra steps, no extra tabs.'],
+  ]
+
   return (
     <FigmaFrame bg="#f7f8fa">
       {/* The same browser chrome as every other screen — the Web Store is just another tab. */}
@@ -200,159 +228,195 @@ export function InstallScreen() {
         </div>
       )}
 
-      {/* The Web Store's own page nav, below the browser chrome. */}
+      {/* The Web Store listing — scrolls beneath the fixed browser chrome. */}
       <div
-        className="absolute left-0 flex h-[58px] w-[1440px] items-center border-b border-[#ececec] bg-white"
-        style={{ top: CHROME_H }}
+        className="absolute left-0 w-[1440px] overflow-y-auto bg-white"
+        style={{ top: CHROME_H, height: 900 - CHROME_H }}
       >
-        <div className="flex items-center gap-[10px] pl-[20px]">
-          <span
-            className="inline-block size-[24px] rounded-full"
-            style={{
-              background:
-                'conic-gradient(#ea4335 0 25%, #4285f4 25% 50%, #34a853 50% 75%, #fbbc05 75% 100%)',
-            }}
-          />
-          <span className="text-[14px] text-[#5f6368]">chrome web store</span>
-        </div>
-        <div className="mx-auto flex h-[38px] w-[520px] items-center gap-[10px] rounded-full bg-[#f1f3f4] px-[18px] text-[#5f6368]">
-          <span className="text-[14px]">🔍</span>
-          <span className="text-[13px]">Search extensions and themes</span>
-        </div>
-        <div className="flex items-center gap-[16px] pr-[24px] text-[#5f6368]">
-          <span className="text-[16px]">⋮</span>
-          <span className="text-[15px]">▦</span>
-          <span className="inline-block size-[24px] rounded-full bg-[#cfcfcf]" />
-        </div>
-      </div>
-
-      {/* Listing content. Wrapped and pushed down so the original Figma coordinates still hold. */}
-      <div className="absolute left-0 w-[1440px]" style={{ top: 40 }}>
-      {/* Header */}
-      <div className="absolute flex flex-col gap-[26px]" style={{ left: 209, top: 116, width: 1021 }}>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-[15px]">
-            <div className="relative size-[58px] rounded-[10px] bg-[#c4e860]">
-              <span className="absolute left-[10.66px] top-[1px] font-serif text-[47.637px] font-bold leading-none text-[#16120f]">
-                C
+        <div className="relative w-[1440px]" style={{ height: 1497 }}>
+          {/* The Web Store's own page nav — coded, using the real store icon image. */}
+          <div className="absolute left-0 top-0 h-[106px] w-[1440px] bg-white">
+            <div className="flex h-[54px] items-center">
+              <div className="flex items-center gap-[8px] pl-[24px]">
+                <img src={asset.cwsIcon} alt="" className="size-[30px] object-contain" />
+                <span className="text-[15px] text-[#5f6368]">chrome web store</span>
+              </div>
+              <div className="mx-auto flex h-[40px] w-[560px] items-center gap-[12px] rounded-full bg-[#f1f3f4] px-[20px] text-[#5f6368]">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                  <circle cx="11" cy="11" r="7" />
+                  <path d="M21 21l-4.3-4.3" strokeLinecap="round" />
+                </svg>
+                <span className="text-[14px]">Search extensions and themes</span>
+              </div>
+              <div className="flex items-center gap-[18px] pr-[28px] text-[#5f6368]">
+                <span className="text-[18px] leading-none">⋮</span>
+                <span className="text-[16px] leading-none">▦</span>
+                <span className="inline-block size-[28px] rounded-full bg-[#c9e26a]" />
+              </div>
+            </div>
+            <div className="flex h-[52px] items-center gap-[28px] border-b border-[#ececec] pl-[24px] text-[14px]">
+              <span className="text-[#5f6368]">Discover</span>
+              <span className="relative flex h-full items-center font-medium text-[#1a73e8]">
+                Extensions
+                <span className="absolute bottom-0 left-0 h-[3px] w-full rounded-t-full bg-[#1a73e8]" />
               </span>
+              <span className="text-[#5f6368]">Themes</span>
+            </div>
+          </div>
+
+          {/* Listing content — Figma container 1332:3267 (left 76, top 116). */}
+          <div className="absolute w-[1296px]" style={{ left: 76, top: 116 }}>
+            {/* Header */}
+            <div className="absolute flex flex-col gap-[26px]" style={{ left: 133, top: 0, width: 1021 }}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-[15px]">
+                  <img
+                    alt=""
+                    src={asset.cSquare}
+                    className="size-[58px] shrink-0 rounded-[10px] object-cover"
+                  />
+                  <p className="text-[29.788px] font-bold text-black">
+                    Connie: Consumer Reports AI Shopping Assistant
+                  </p>
+                </div>
+                {installed ? (
+                  <div className="flex h-[37px] items-center justify-center gap-[7px] rounded-full border border-[#dadce0] bg-white px-[18px]">
+                    <IconCheck size={15} className="text-[#188038]" />
+                    <span className="whitespace-nowrap text-[13.254px] font-medium text-[#5f6368]">
+                      Added to Chrome
+                    </span>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => {
+                      setInstalled(true)
+                      setToast(true)
+                    }}
+                    className="flex h-[37px] w-[142px] items-center justify-center rounded-full bg-[#0e4dca] text-[13.254px] font-medium text-white transition-colors hover:bg-[#0b3ea6]"
+                  >
+                    Add to Chrome
+                  </button>
+                )}
+              </div>
+
+              <div className="flex items-center gap-[19px]">
+                <div className="flex items-center gap-[3px]">
+                  <img alt="" src={asset.installSealCheck} className="size-[21px]" />
+                  <span className={`${metaText} text-[#0e4dca]`}>http://consumerreports.org/</span>
+                </div>
+                <div className="flex items-center gap-[6px]">
+                  <img alt="" src={asset.installMedal} className="size-[19px]" />
+                  <span className={`${metaText} text-[#146129]`}>Featured</span>
+                </div>
+                <div className="flex items-center gap-[4px]">
+                  <span className={`${metaText} text-[#1d1d1d]`}>4.9</span>
+                  <IconStar size={16} className="text-[#f6b01e]" />
+                  <span className="text-[16.337px] text-[#1d1d1d]">
+                    (<span className="text-[#296be5]">3.4K ratings</span>)
+                  </span>
+                  <IconInfo size={19} className="text-[#5f6368]" />
+                </div>
+                <div className="flex items-center gap-[7px]">
+                  <IconShare size={17} className="text-[#0e4dca]" />
+                  <span className="text-[16.337px] text-[#0e4dca]">Share</span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-[9px]">
+                <div className="flex h-[35px] w-[81px] items-center rounded-[8px] bg-[#eef2f8] pl-[11px] text-[13.576px] text-[#333334]">
+                  Extension
+                </div>
+                <div className="flex h-[35px] w-[81px] items-center rounded-[8px] bg-[#eef2f8] pl-[11px] text-[13.576px] text-[#333334]">
+                  Shopping
+                </div>
+                <span className="text-[13.576px] text-[#333334]">10,000 users</span>
+              </div>
+            </div>
+
+            {/* Hero gallery — a two-up carousel of the Figma images; arrows slide the pair. */}
+            <div className="absolute" style={{ left: 0, top: 210, width: 1296, height: 353 }}>
               <img
                 alt=""
-                src={asset.installSoftStar}
-                className="absolute left-[9px] top-[11.35px] size-[14.286px]"
+                src={gallery[galleryStart]}
+                className="absolute top-0 rounded-[7px] object-cover shadow-[0px_0px_5px_1px_rgba(0,0,0,0.25)]"
+                style={{ left: 57, width: 564, height: 353 }}
               />
+              <img
+                alt=""
+                src={gallery[galleryStart + 1]}
+                className="absolute top-0 rounded-[7px] object-cover shadow-[0px_0px_5px_1px_rgba(0,0,0,0.25)]"
+                style={{ left: 665, width: 564, height: 353 }}
+              />
+              <button
+                aria-label="Previous images"
+                disabled={galleryStart === 0}
+                onClick={() => showPair(galleryStart - 1)}
+                className="absolute left-[0px] top-[157px] flex size-[36px] items-center justify-center rounded-full text-[#5f6368] transition enabled:hover:bg-[#f1f3f4] disabled:opacity-30"
+              >
+                <IconCaretLeft size={24} />
+              </button>
+              <button
+                aria-label="Next images"
+                disabled={galleryStart === maxStart}
+                onClick={() => showPair(galleryStart + 1)}
+                className="absolute left-[1239px] top-[157px] flex size-[36px] items-center justify-center rounded-full text-[#5f6368] transition enabled:hover:bg-[#f1f3f4] disabled:opacity-30"
+              >
+                <IconCaretRight size={24} />
+              </button>
             </div>
-            <p className="text-[29.788px] font-bold text-black">
-              Connie: Consumer Reports AI Shopping Assistant
-            </p>
-          </div>
-          {installed ? (
-            <div className="flex h-[37px] items-center justify-center gap-[7px] rounded-full border border-[#dadce0] bg-white px-[18px]">
-              <IconCheck size={15} className="text-[#188038]" />
-              <span className="whitespace-nowrap text-[13.254px] font-medium text-[#5f6368]">
-                Added to Chrome
-              </span>
+
+            {/* Thumbnail strip — click to jump; the visible pair is outlined. */}
+            <div className="absolute flex items-center gap-[16px]" style={{ left: 464, top: 600 }}>
+              {gallery.map((src, i) => {
+                const active = i === galleryStart || i === galleryStart + 1
+                return (
+                  <button
+                    key={src}
+                    aria-label={`Show image ${i + 1}`}
+                    onClick={() => showPair(i === maxStart + 1 ? maxStart : i)}
+                    className={`h-[49px] w-[78px] overflow-hidden rounded-[6px] ${
+                      active ? 'border-2 border-[#0e4dca]' : 'border border-[#e0e0e0]'
+                    }`}
+                  >
+                    <img alt="" src={src} className="h-full w-full object-cover" />
+                  </button>
+                )
+              })}
             </div>
-          ) : (
-            <button
-              onClick={() => {
-                setInstalled(true)
-                setToast(true)
-              }}
-              className="flex h-[37px] w-[142px] items-center justify-center rounded-full bg-[#6699f2] text-[13.254px] font-medium text-white transition-colors hover:bg-[#5a8ce6]"
-            >
-              Add to Chrome
-            </button>
-          )}
-        </div>
 
-        <div className="flex items-center gap-[19px]">
-          <div className="flex items-center gap-[3px]">
-            <img alt="" src={asset.installSealCheck} className="size-[21px]" />
-            <span className={`${metaText} text-[#0e4dca]`}>http://consumerreports.org/</span>
-          </div>
-          <div className="flex items-center gap-[6px]">
-            <img alt="" src={asset.installMedal} className="size-[19px]" />
-            <span className={`${metaText} text-[#146129]`}>Featured</span>
-          </div>
-          <div className="flex items-center gap-[4px]">
-            <span className={`${metaText} text-[#1d1d1d]`}>4.9</span>
-            <IconStar size={16} className="text-[#f6b01e]" />
-            <span className="text-[16.337px] text-[#1d1d1d]">
-              (<span className="text-[#296be5]">3.4K ratings</span>)
-            </span>
-            <IconInfo size={19} className="text-[#5f6368]" />
-          </div>
-          <div className="flex items-center gap-[7px]">
-            <IconShare size={17} className="text-[#0e4dca]" />
-            <span className="text-[16.337px] text-[#0e4dca]">Share</span>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-[9px]">
-          <div className="flex h-[35px] w-[81px] items-center rounded-[8px] bg-[#eef2f8] pl-[11px] text-[13.576px] text-[#333334]">
-            Extension
-          </div>
-          <div className="flex h-[35px] w-[81px] items-center rounded-[8px] bg-[#eef2f8] pl-[11px] text-[13.576px] text-[#333334]">
-            Shopping
-          </div>
-          <span className="text-[13.576px] text-[#333334]">10,000 users</span>
-        </div>
-      </div>
-
-      {/* Hero gallery */}
-      <div className="absolute" style={{ left: 76, top: 326, width: 1296, height: 353 }}>
-        <div
-          className="absolute top-0 rounded-[7px] bg-[#c4e860] shadow-[0px_0px_5px_1px_rgba(0,0,0,0.25)]"
-          style={{ left: 57, width: 564, height: 353 }}
-        >
-          <div className="relative h-full">
-            <img
-              alt=""
-              src={asset.installSoftStar}
-              className="absolute left-[108.28px] top-[98.13px] size-[29.045px]"
-            />
-            <p className="absolute left-[111.65px] top-[77.09px] font-serif text-[96.848px] font-bold leading-none text-[#16120f]">
-              Connie
-            </p>
-            <p className="absolute left-[151px] top-[182px] text-[26.336px] font-light text-[#16120f]">
-              Shop with confidence.
-            </p>
-            <p className="absolute right-[305px] top-[248.09px] text-right text-[9.471px] text-[#16120f]">
-              Built &amp; backed by
-            </p>
-            <img
-              alt=""
-              src={asset.installCrLogo}
-              className="absolute left-[268.42px] top-[241px] h-[28.592px] w-[112.127px] object-contain"
-            />
+            {/* Overview */}
+            <div className="absolute" style={{ left: 133, top: 711, width: 996 }}>
+              <p className="font-serif text-[26.307px] font-bold text-black">Overview</p>
+              <div className="mt-[30px] flex flex-col gap-[17px] text-[16px] text-black">
+                <p className="leading-[24px]">Shop confidently with Consumer Reports, right in your browser.</p>
+                <p className="leading-[22px]">
+                  Connie is a free browser extension from Consumer Reports that brings trusted,
+                  unbiased product research to you as you shop. No more juggling tabs or guessing
+                  which reviews to trust. It’s AI that shops on your side.
+                </p>
+                <p className="leading-[22px]">
+                  By installing the extension you agree to the additional Connie Terms &amp;
+                  Conditions: <span className="font-medium text-[#3086ff]">http://consumerreports.org/</span>
+                </p>
+                {features.map(([title, body]) => (
+                  <p key={title} className="leading-[22px]">
+                    {title}
+                    <br />
+                    {` ${body}`}
+                  </p>
+                ))}
+                <p className="leading-[22px]">
+                  Please see our Privacy Policy at{' '}
+                  <span className="font-medium text-[#296be5]">http://consumerreports.org/</span>
+                </p>
+                <p className="leading-[22px]">
+                  Connie is built by Consumer Reports, a nonprofit with no ads and no financial ties
+                  to the brands we cover.
+                </p>
+              </div>
+            </div>
           </div>
         </div>
-        <img
-          alt=""
-          src={asset.installHero}
-          className="absolute top-0 rounded-[7px] object-cover shadow-[0px_0px_5px_1px_rgba(0,0,0,0.25)]"
-          style={{ left: 665, width: 564, height: 353 }}
-        />
-        <IconCaretLeft size={24} className="absolute left-[12px] top-[170px] text-[#5f6368]" />
-        <IconCaretRight size={24} className="absolute left-[1251px] top-[170px] text-[#5f6368]" />
-      </div>
-
-      {/* Thumbnail strip */}
-      <div className="absolute flex items-center gap-[16px]" style={{ left: 446, top: 716 }}>
-        <div className="relative h-[49px] w-[78px] rounded-[6px] border-2 border-[#0e4dca] bg-[#c4e860]">
-          <span className="absolute left-[14.49px] top-[11px] font-serif text-[14.014px] font-bold text-[#16120f]">
-            Connie
-          </span>
-        </div>
-        <img alt="" src={asset.installHero} className="h-[49px] w-[78px] rounded-[6px] object-cover" />
-        <div className="h-[49px] w-[78px] rounded-[6px] bg-[#ececec]" />
-        <div className="h-[49px] w-[78px] rounded-[6px] bg-[#ececec]" />
-        <div className="h-[49px] w-[78px] rounded-[6px] bg-[#ececec]" />
-        <div className="h-[49px] w-[78px] rounded-[6px] bg-[#ececec]" />
-      </div>
-
-      <p className="absolute left-[209px] top-[827px] text-[26.307px] font-bold text-black">Overview</p>
       </div>
     </FigmaFrame>
   )
@@ -549,7 +613,7 @@ export function LoginScreen() {
     <FigmaFrame>
       <OnboardingBackdrop />
       <Panel gap={18} onClose={() => navigate(routes.search)}>
-        <p className="w-full text-[24px] font-semibold leading-[28px] tracking-[-0.1px] text-fg-primary">
+        <p className="text-title1 font-semibold text-fg-primary">
           Welcome! Log in to sync Connie with your CR Profile.
         </p>
         <p className="w-full text-body text-fg-secondary">

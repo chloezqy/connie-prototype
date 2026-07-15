@@ -26,8 +26,8 @@ export function ConnieHeader({
         className,
       )}
     >
-      <img src="/figma/C.png" alt="" className="size-[28px] shrink-0 object-contain" />
-      <p className="flex-1 text-[16px] font-semibold leading-[24px] text-fg-primary">Connie</p>
+      <img src="/figma/Connie.png" alt="Connie" className="h-[26px] w-auto shrink-0 object-contain" />
+      <span className="flex-1" />
       {onClose && (
         <button
           aria-label="Close"
