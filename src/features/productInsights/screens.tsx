@@ -12,29 +12,54 @@ import {
 } from '@/store/usePreferences'
 import { communityPosts, type CommunitySource } from '@/mocks/communityPosts'
 import { cleanEvidence } from '@/lib/sourceFilter'
+import { LOADING_MS, MAX_LOADING_MS } from '@/lib/timing'
 import { NaviRail } from '@/components/connie/NaviRail'
 import { RetailBackdrop } from '@/components/connie/RetailBackdrop'
-import { IconHeart } from '@/components/icons'
+import { badgePos, overlayBox, SEARCH_GRID } from '@/components/retail/AmazonSearchPage'
+import { AMAZON_PRODUCTS } from '@/mocks/retail'
+import { DimOverlay } from '@/components/connie/DimOverlay'
+import {
+  IconHeart,
+  IconShieldCheck,
+  IconTag,
+  IconSparkle,
+  IconHandTap,
+  IconLeaf,
+} from '@/components/icons'
 
-/* The three strollers below are the ones actually visible on the retail backdrop
- * (`public/figma/insights-bg.png`, an Amazon search page). They must stay in sync with the
- * CR dataset — see `backend-data/README.md`. If you change the roster, change it in three
- * places: this file, the CR data file, and the roster count in the Langflow prompt. */
+/* The three strollers below are the ones on the mocked Amazon search page behind this screen.
+ * Their names/prices/photos live in `src/mocks/retail.ts` — the page and Connie's cards both read
+ * from there, so they can't drift. This file only names them for the backend calls.
+ *
+ * They must stay in sync with the CR dataset — see `backend-data/README.md`. If you change the
+ * roster, change it in three places: `mocks/retail.ts`, the CR data file, and the roster count in
+ * the Langflow prompt. */
 
-/** Centre product (green badge, left: 796) — drives the live product_insights request. */
-const LIVE_PRODUCT = 'Baby Trend Passport Switch 6-in-1'
+/** Centre product (green badge) — drives the live product_insights request. */
+const LIVE_PRODUCT = AMAZON_PRODUCTS.babytrend.name
 
-/** The two not-recommended strollers, keyed by which grey badge opens them.
- *  `pos` anchors each panel near its product card (panel is 540 wide in a 1440 frame, so the
- *  right-hand one is clamped to stay on canvas). Both panels remain draggable. */
+/** Panel width, and the furthest left it can start while staying on a 1440 canvas. */
+const PANEL_W = 540
+const PANEL_MAX_LEFT = 1440 - PANEL_W - 16
+
+/** Anchor a panel under the card at index `i`, clamped onto the canvas. Derived from the search
+ *  page's own layout, so a panel points at the product it's describing. Still draggable. */
+function panelPosFor(i: number) {
+  return {
+    left: Math.min(SEARCH_GRID.lefts[i], PANEL_MAX_LEFT),
+    top: SEARCH_GRID.cardTop + 56,
+  }
+}
+
+/** The two not-recommended strollers, keyed by which grey badge opens them. */
 const NOT_REC_PRODUCTS = {
   left: {
-    name: 'Dream On Me Aero Travel Umbrella Stroller',
-    pos: { left: 176, top: 170 },
+    name: AMAZON_PRODUCTS.aero.amazonTitle.split(',')[0],
+    pos: panelPosFor(0),
   },
   right: {
-    name: 'Graco Ready2Grow 2.0 Double Stroller',
-    pos: { left: 880, top: 170 },
+    name: AMAZON_PRODUCTS.graco.amazonTitle.split(',')[0],
+    pos: panelPosFor(2),
   },
 } as const
 
@@ -89,7 +114,7 @@ function Sources({
 
 /* ------------------------------------------------------------ Recommended row */
 type DetailBlock = { source: string; text: string; chipImg: string; chipLabel: string }
-type RowData = {
+export type RowData = {
   icon: string
   iconSize: number
   title: string
@@ -102,7 +127,14 @@ const av5 = `${A}av5.png`
 const av7 = `${A}av7.png`
 const av18 = `${A}av18.png`
 
-const rows: RowData[] = [
+/**
+ * The six things Connie says about a recommended stroller.
+ *
+ * EXPORTED, and reused verbatim by Decision Support's "Show details" grid — the two are the same
+ * claims about the same product, so they read from one list rather than two that drift apart.
+ * (These are the baked fallback; live `product_insights` replaces them here via `insightsToRows`.)
+ */
+export const rows: RowData[] = [
   {
     icon: `${A}toprated.svg`,
     iconSize: 20,
@@ -198,13 +230,34 @@ const rows: RowData[] = [
         source: 'Consumer Reports',
         text: 'The one-hand fold engaged reliably every time in our repeated open/close trials.',
         chipImg: av7,
-        chipLabel: 'Fold Mechanism Test',
+        chipLabel: 'CR Fold Mechanism Test',
       },
       {
         source: 'Reddit',
         text: 'Frequent flyers love how quickly it collapses at the gate and in the trunk.',
         chipImg: av5,
-        chipLabel: 'Travel Thread',
+        chipLabel: 'r/Travel · “Gate-checking strollers”',
+      },
+    ],
+  },
+  {
+    icon: `${A}safety.svg`,
+    iconSize: 20,
+    title: 'Safety First',
+    subtitle: 'Five-point harness and a brake that held on every incline our testers ran.',
+    sources: [av7, av5],
+    detail: [
+      {
+        source: 'Consumer Reports',
+        text: 'Passed every stability and brake-hold test at full incline, with no harness slippage across repeated loading.',
+        chipImg: av7,
+        chipLabel: 'CR Safety Test Report',
+      },
+      {
+        source: 'Reddit',
+        text: 'Parents consistently mention the harness staying put even with a determined toddler.',
+        chipImg: av5,
+        chipLabel: 'r/BeyondTheBump · “Harness escape artists”',
       },
     ],
   },
@@ -356,17 +409,17 @@ function InsightRow({
 }
 
 /* --------------------------------------------------------------- Popover */
-/** Chip in the BASED ON popover. Clickable when `onClick` is given; muted when not selected. */
+/** Chip in the BASED ON popover. Read-only by default; in edit mode it toggles. */
 function Chip({
   img,
+  icon,
   label,
-  pencil = true,
   selected = true,
   onClick,
 }: {
   img?: string
+  icon?: ReactNode
   label: string
-  pencil?: boolean
   selected?: boolean
   onClick?: () => void
 }) {
@@ -374,13 +427,13 @@ function Chip({
   return (
     <Tag
       onClick={onClick}
-      className={`flex h-[34px] items-center gap-[6px] rounded-full border-[0.5px] bg-white py-[6px] pl-[8px] pr-[16px] ${
-        selected ? 'border-border-strong' : 'border-dashed border-border-subtle opacity-45'
+      className={`flex h-[32px] items-center gap-[6px] rounded-full border bg-white py-[6px] pl-[8px] pr-[14px] ${
+        selected ? 'border-border-strong' : 'border-dashed border-border-subtle text-fg-secondary opacity-55'
       } ${onClick ? 'cursor-pointer transition-opacity hover:opacity-100' : ''}`}
     >
-      {img && <img src={img} alt="" className="size-[20px] rounded-full border-[0.5px] border-white object-cover" />}
+      {img && <img src={img} alt="" className="size-[18px] rounded-full border-[0.5px] border-white object-cover" />}
+      {icon}
       <span className="whitespace-nowrap text-[14px] leading-[20px] text-[#21211f]">{label}</span>
-      {pencil && <img src={`${A}pencil.svg`} alt="" className="size-[16px]" />}
     </Tag>
   )
 }
@@ -395,71 +448,119 @@ const COMMUNITY_ICON: Record<string, string> = {
   'Online blogs': '/figma/comm-google.svg',
 }
 
+/** One glyph per shopping value, shared with onboarding N4b so a value looks the same everywhere. */
+const PREFERENCE_ICON: Record<string, (p: { size?: number; className?: string }) => JSX.Element> = {
+  'Long-term reliability': IconShieldCheck,
+  'Value for price': IconTag,
+  Aesthetics: IconSparkle,
+  'Ease of use': IconHandTap,
+  Sustainability: IconLeaf,
+}
+
+/** A labelled row in the popover: icon + caption + its chips. */
+function BasedOnRow({ icon, label, children }: { icon: ReactNode; label: string; children: ReactNode }) {
+  return (
+    <div className="flex items-start gap-[10px]">
+      <div className="flex w-[104px] shrink-0 items-center gap-[8px] pt-[6px]">
+        {icon}
+        <span className="text-[14px] font-semibold leading-[20px] text-fg-secondary">{label}</span>
+      </div>
+      <div className="flex flex-1 flex-wrap items-center gap-[6px]">{children}</div>
+    </div>
+  )
+}
+
+/**
+ * "BASED ON" — what actually drove this rec.
+ *
+ * By default it shows ONLY what's in play: CR, the communities the shopper connected, and the
+ * values they picked. The old version listed every option in the catalogue as a dashed ghost
+ * chip, so the honest answer ("Reddit + Instagram") was buried in four greyed-out ones it
+ * explicitly wasn't based on. Editing still lives here, behind an explicit Edit toggle.
+ */
 function BasedOnPopover({
   onClose,
   preferences,
   sources,
+  pos,
   onMouseEnter,
   onMouseLeave,
 }: {
   onClose: () => void
   preferences: string[]
   sources: string[]
+  /** Anchors the popover above the card, so it follows the card when it's dragged. */
+  pos: { left: number; top: number }
   onMouseEnter?: () => void
   onMouseLeave?: () => void
 }) {
-  // The pencils mean these are editable — toggle a source/preference right here.
   const toggleSource = usePreferences((s) => s.toggleSource)
   const togglePreference = usePreferences((s) => s.togglePreference)
+  const [editing, setEditing] = useState(false)
+
+  const shownSources = editing ? ALL_COMMUNITIES : sources
+  const shownPreferences = editing ? ALL_PREFERENCES : preferences
+
   return (
     <div
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
-      className="absolute z-20 flex flex-col gap-[8px] overflow-hidden rounded-[16px] border-[0.5px] border-border-subtle bg-bg-secondary pb-[16px] pl-[32px] pr-[40px] pt-[24px] shadow-[0px_0px_15px_0px_rgba(5,5,0,0.16)]"
-      style={{ left: 731, top: 85, width: 520 }}
+      className="absolute z-20 flex flex-col gap-[14px] overflow-hidden rounded-[16px] border-[0.5px] border-border-subtle bg-bg-secondary px-[24px] pb-[18px] pt-[20px] shadow-[0px_0px_15px_0px_rgba(5,5,0,0.16)]"
+      style={{ left: pos.left - 4, top: Math.max(8, pos.top - 214), width: 520 }}
     >
-      <p className="text-[16px] font-semibold leading-[24px] text-fg-primary">BASED ON:</p>
-      <div className="flex flex-col gap-[20px] pb-[12px] pr-[4px] pt-[4px]">
-        <div className="flex flex-col gap-[8px]">
-          <div className="flex items-center gap-[8px]">
-            <div className="flex items-center gap-[8px]">
-              <img src={`${A}link.svg`} alt="" className="size-[18px]" />
-              <span className="text-[16px] leading-[24px] text-fg-primary">Sources:</span>
-            </div>
-            <div className="flex flex-wrap items-center gap-[8px]">
-              {ALL_COMMUNITIES.map((s) => (
-                <Chip
-                  key={s}
-                  img={COMMUNITY_ICON[s]}
-                  label={s}
-                  selected={sources.includes(s)}
-                  onClick={() => toggleSource(s)}
-                />
-              ))}
-            </div>
-          </div>
-          <div className="flex flex-col items-start pl-[94px]">
-            <Chip img={av7} label="Consumer Reports" pencil={false} />
-          </div>
-        </div>
-        <div className="flex items-start gap-[8px]">
-          <div className="flex shrink-0 items-center gap-[8px] pt-[6px]">
-            <img src={`${A}sliders.svg`} alt="" className="size-[20px]" />
-            <span className="text-[16px] leading-[24px] text-fg-primary">Preferences:</span>
-          </div>
-          <div className="flex flex-wrap items-center gap-[8px]">
-            {ALL_PREFERENCES.map((p) => (
-              <Chip
-                key={p}
-                label={p}
-                selected={preferences.includes(p)}
-                onClick={() => togglePreference(p)}
-              />
-            ))}
-          </div>
-        </div>
+      {/* pr-[32px] keeps Edit clear of the close button, which is positioned over this row. */}
+      <div className="flex items-center justify-between pr-[32px]">
+        <p className="text-[12px] font-semibold uppercase leading-[16px] tracking-[1px] text-fg-secondary">
+          Based on
+        </p>
+        <button
+          onClick={() => setEditing((e) => !e)}
+          className="flex items-center gap-[5px] text-[13px] font-semibold leading-[18px] text-fg-brand"
+        >
+          <img src={`${A}pencil.svg`} alt="" className="size-[14px]" />
+          {editing ? 'Done' : 'Edit'}
+        </button>
       </div>
-      <button onClick={onClose} className="absolute left-[475.5px] top-[22.5px] size-[20px]" aria-label="Close">
+
+      <BasedOnRow icon={<img src={`${A}link.svg`} alt="" className="size-[16px]" />} label="Sources">
+        <Chip img={av7} label="Consumer Reports" />
+        {shownSources.map((s) => (
+          <Chip
+            key={s}
+            img={COMMUNITY_ICON[s]}
+            label={s}
+            selected={sources.includes(s)}
+            onClick={editing ? () => toggleSource(s) : undefined}
+          />
+        ))}
+        {!editing && sources.length === 0 && (
+          <span className="text-[13px] leading-[20px] text-fg-secondary">
+            No communities connected — CR lab data only.
+          </span>
+        )}
+      </BasedOnRow>
+
+      <BasedOnRow icon={<img src={`${A}sliders.svg`} alt="" className="size-[18px]" />} label="Your values">
+        {shownPreferences.map((p) => {
+          const Icon = PREFERENCE_ICON[p]
+          return (
+            <Chip
+              key={p}
+              icon={Icon ? <Icon size={16} className="text-fg-secondary" /> : undefined}
+              label={p}
+              selected={preferences.includes(p)}
+              onClick={editing ? () => togglePreference(p) : undefined}
+            />
+          )
+        })}
+        {!editing && preferences.length === 0 && (
+          <span className="text-[13px] leading-[20px] text-fg-secondary">
+            Nothing set yet — ranked on CR's overall score.
+          </span>
+        )}
+      </BasedOnRow>
+
+      <button onClick={onClose} className="absolute right-[18px] top-[18px] size-[16px]" aria-label="Close">
         <img src={`${A}x.svg`} alt="" className="size-full" />
       </button>
     </div>
@@ -511,30 +612,20 @@ function InsightRowsShimmer({ count = 4 }: { count?: number }) {
 
 /* --------------------------------------------------- Insight panel (shared) */
 type Verdict = 'recommended' | 'notrec'
-/** Same fun fact on both the recommended and not-recommended cards. */
+/** Trivia only rides along on a recommended pick — it's a delight beat, and there's nothing
+ *  delightful about a card telling you why the thing you're looking at is a bad buy. */
 const FUN_FACT =
   "The first stroller, built in 1733, wasn't pushed at all — it was pulled by a goat or pony as a decorative novelty for wealthy families."
-const VERDICT_CFG: Record<
-  Verdict,
-  { icon: string; title: string; funFact: string; headsUp: { title: string; text: string } }
-> = {
+const VERDICT_CFG: Record<Verdict, { icon: string; title: string; funFact: string | null }> = {
   recommended: {
     icon: `${A}star.svg`,
     title: 'RECOMMENDED',
     funFact: FUN_FACT,
-    headsUp: {
-      title: 'Heads up on comfort',
-      text: 'Great pick overall - just note a few users noted that the seat was less comfortable than expected.',
-    },
   },
   notrec: {
     icon: `${A}xcircle.svg`,
     title: 'NOT RECOMMENDED',
-    funFact: FUN_FACT,
-    headsUp: {
-      title: 'One thing in its favor',
-      text: "It's among the cheapest options on the shelf - but our testers found the tradeoffs rarely worth it.",
-    },
+    funFact: null,
   },
 }
 
@@ -585,8 +676,8 @@ function InsightPanel({
     closeTimer.current = window.setTimeout(() => setTooltip(false), 300)
   }
 
-  // Draggable panel position (Figma default 736 / 287).
-  const [pos, setPos] = useState(initialPos ?? { left: 736, top: 287 })
+  // Draggable panel position — defaults under the recommended product's card.
+  const [pos, setPos] = useState(initialPos ?? panelPosFor(1))
   const dragRef = useRef<{ x: number; y: number; left: number; top: number } | null>(null)
   const onDragStart = (e: React.PointerEvent) => {
     dragRef.current = { x: e.clientX, y: e.clientY, left: pos.left, top: pos.top }
@@ -658,9 +749,28 @@ function InsightPanel({
 
         {/* scrollable body — extra right gutter so the scrollbar isn't flush to the edge */}
         <div className="scrollbar-thin mr-[18px] min-h-0 flex-1 overflow-y-auto pl-[36px] pr-[38px] pt-[16px]">
-          <div className="flex flex-col gap-[16px]">
-            <div className="flex flex-col gap-[24px]">
-              {/* DID YOU KNOW — inside the card */}
+          <div className="flex flex-col gap-[20px] pb-[8px]">
+            {/* rows — shimmer while live insights are generating, never mock-then-swap */}
+            {loading ? (
+              <InsightRowsShimmer />
+            ) : (
+              <div className="flex w-full flex-col">
+                {rows.map((row, i) => (
+                  <InsightRow
+                    key={row.title}
+                    row={row}
+                    first={i === 0}
+                    last={i === rows.length - 1}
+                    open={openRow === i}
+                    onToggle={() => setOpenRow((cur) => (cur === i ? null : i))}
+                  />
+                ))}
+              </div>
+            )}
+
+            {/* DID YOU KNOW — the tail of the card, after the evidence it's a break from.
+                Recommended picks only (see VERDICT_CFG). */}
+            {!loading && cfg.funFact && (
               <div className="relative flex w-full flex-col gap-[4px] overflow-hidden rounded-[8px] bg-gradient-to-r from-[rgba(217,237,226,0.3)] to-[rgba(251,245,221,0.3)] px-[24px] py-[20px]">
                 <div className="flex w-full items-center gap-[8px]">
                   <img src={`${A}shootingstar.svg`} alt="" className="size-[20px]" />
@@ -673,46 +783,13 @@ function InsightPanel({
                   className="absolute left-[359px] top-[16px] size-[88px] rounded-[8px] object-cover opacity-15"
                 />
               </div>
-
-              {/* rows — shimmer while live insights are generating, never mock-then-swap */}
-              {loading ? (
-                <InsightRowsShimmer />
-              ) : (
-                <div className="flex w-full flex-col">
-                  {rows.map((row, i) => (
-                    <InsightRow
-                      key={row.title}
-                      row={row}
-                      first={i === 0}
-                      last={i === rows.length - 1}
-                      open={openRow === i}
-                      onToggle={() => setOpenRow((cur) => (cur === i ? null : i))}
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* heads up — yellow on RECOMMENDED (nothing red on a recommended pick), red on NOT REC */}
-            <div className="py-[8px]">
-              <div
-                className={`flex w-full items-start gap-[8px] pb-[20px] pl-[16px] pr-[20px] pt-[16px] ${
-                  verdict === 'recommended' ? 'bg-[rgba(255,247,214,0.8)]' : 'bg-[rgba(255,240,244,0.7)]'
-                }`}
-              >
-                <img src={`${A}warning.svg`} alt="" className="h-[23.625px] w-[20px] shrink-0" />
-                <div className="flex flex-1 flex-col gap-[4px]">
-                  <p className="text-[16px] font-semibold leading-[24px] text-fg-primary">{cfg.headsUp.title}</p>
-                  <p className="text-[14px] leading-[20px] text-fg-primary">{cfg.headsUp.text}</p>
-                </div>
-              </div>
-            </div>
+            )}
           </div>
         </div>
 
         {/* footer */}
-        <div className="shrink-0 pb-[12px] pl-[36px] pr-[56px]">
-          <div className="flex w-full items-center justify-center gap-[10px] border-t border-border-subtle py-[8px]">
+        <div className="shrink-0 pb-[4px] pl-[36px] pr-[56px]">
+          <div className="flex w-full items-center justify-center gap-[10px] border-t border-border-subtle py-[6px]">
             <span className="whitespace-nowrap text-[12px] font-semibold leading-[16px] text-[#585858]">
               LIKE THIS REC?
             </span>
@@ -738,6 +815,7 @@ function InsightPanel({
           onClose={() => setTooltip(false)}
           preferences={preferences}
           sources={sources}
+          pos={pos}
           onMouseEnter={openTip}
           onMouseLeave={closeTipSoon}
         />
@@ -856,12 +934,9 @@ const notRecRows: RowData[] = [
 ]
 
 /* ----------------------------------------------- "Generating insights" overlay */
-/** The product-image squares Connie's badges land on (frame coords). */
-const PRODUCT_SQUARES = [
-  { left: 30, top: 132, width: 352, height: 346 },
-  { left: 452, top: 132, width: 358, height: 346 },
-  { left: 885, top: 132, width: 348, height: 346 },
-]
+/** The squares the "analyzing" shimmer covers — the product photo plus SEARCH_GRID.overlayPad on
+ *  each side. Same box the guided tour spotlights, so the two read as one gesture. */
+const PRODUCT_SQUARES = [overlayBox(0), overlayBox(1), overlayBox(2)]
 
 /** Yellow-green "AI is generating insights" shimmer over each product image, shown on load. */
 function GeneratingOverlay() {
@@ -873,7 +948,9 @@ function GeneratingOverlay() {
           className="pointer-events-none absolute animate-pulse overflow-hidden rounded-[8px] bg-gradient-to-br from-[rgba(217,237,226,0.85)] to-[rgba(251,245,221,0.85)]"
           style={{ left: s.left, top: s.top, width: s.width, height: s.height }}
         >
-          <span className="absolute left-[12px] top-[12px] flex items-center gap-[6px] rounded-full bg-white/70 px-[10px] py-[4px] text-[12px] font-semibold text-[#282923]">
+          {/* Bottom-left, not top-left: the retailer's own corner flags (Amazon's "Best Seller")
+              live in the top-left of a product, and two labels stacked there read as a collision. */}
+          <span className="absolute bottom-[12px] left-[12px] flex items-center gap-[6px] rounded-full bg-white/70 px-[10px] py-[4px] text-[12px] font-semibold text-[#282923]">
             <img src={`${A}shootingstar.svg`} alt="" className="size-[14px]" />
             Analyzing…
           </span>
@@ -891,13 +968,23 @@ function ProductBadges({
   onOpen: () => void
   onOpenNotRec: (slot: NotRecSlot) => void
 }) {
+  /* Badge index matches SEARCH_ROSTER order: aero, babytrend, graco. */
   return (
     <>
+      {/* Left card — Dream On Me Aero (not recommended). */}
+      <button
+        onClick={() => onOpenNotRec('left')}
+        className="pointer-events-auto absolute flex items-center justify-center rounded-full bg-[#9d9d9d] shadow-subtle"
+        style={{ ...badgePos(0), width: 45, height: 45 }}
+        aria-label={`See why the ${NOT_REC_PRODUCTS.left.name} isn't recommended`}
+      >
+        <img src={`${A}chatcircle.svg`} alt="" className="size-[28px]" />
+      </button>
       {/* Centre card — Baby Trend Passport Switch 6-in-1 (recommended). */}
       <button
         onClick={onOpen}
-        className="pointer-events-auto absolute flex items-center justify-center rounded-full bg-rating-excellent"
-        style={{ left: 796, top: 101, width: 45, height: 45 }}
+        className="pointer-events-auto absolute flex items-center justify-center rounded-full bg-rating-excellent shadow-subtle"
+        style={{ ...badgePos(1), width: 45, height: 45 }}
         aria-label={`Open Connie insights for the ${LIVE_PRODUCT}`}
       >
         <img src={`${A}chatblob.png`} alt="" className="size-[28px] object-contain" />
@@ -905,18 +992,9 @@ function ProductBadges({
       {/* Right card — Graco Ready2Grow 2.0 (not recommended). */}
       <button
         onClick={() => onOpenNotRec('right')}
-        className="pointer-events-auto absolute flex items-center justify-center rounded-full bg-[#9d9d9d]"
-        style={{ left: 1215, top: 101, width: 45, height: 45 }}
+        className="pointer-events-auto absolute flex items-center justify-center rounded-full bg-[#9d9d9d] shadow-subtle"
+        style={{ ...badgePos(2), width: 45, height: 45 }}
         aria-label={`See why the ${NOT_REC_PRODUCTS.right.name} isn't recommended`}
-      >
-        <img src={`${A}chatcircle.svg`} alt="" className="size-[28px]" />
-      </button>
-      {/* Left card — Dream On Me Aero (not recommended). */}
-      <button
-        onClick={() => onOpenNotRec('left')}
-        className="pointer-events-auto absolute flex items-center justify-center rounded-full bg-[#9d9d9d]"
-        style={{ left: 356, top: 100, width: 45, height: 45 }}
-        aria-label={`See why the ${NOT_REC_PRODUCTS.left.name} isn't recommended`}
       >
         <img src={`${A}chatcircle.svg`} alt="" className="size-[28px]" />
       </button>
@@ -1068,7 +1146,7 @@ export function ProductInsightsScreen() {
     // Same ceiling as the recommended card — long enough not to fire during a normal call.
     const cap = window.setTimeout(
       () => setNotRecSettled((prev) => ({ ...prev, [notRecSlot]: true })),
-      45000,
+      MAX_LOADING_MS,
     )
     callConnieCached({
       message: `What are the key insights on the ${NOT_REC_PRODUCTS[notRecSlot].name}?`,
@@ -1105,27 +1183,25 @@ export function ProductInsightsScreen() {
 
   // "Generating insights" shimmer over the product images, before the badges appear.
   //
-  // Chloe's version was a blind `setTimeout(…, 5000)` — it cleared after 5s whether or not the
-  // backend had answered, so a slow call (or a Vertex 429) would reveal the badges and then serve
-  // mock rows behind an animation that claimed we'd analysed the page. Now it holds until the real
-  // fetch settles, with her 5s as a FLOOR so it never flashes, and a 20s ceiling so a hung backend
-  // can't trap the user behind a permanent shimmer.
+  // Chloe's version was a blind `setTimeout(…, 5000)` — it cleared after a fixed delay whether or
+  // not the backend had answered, so a slow call (or a Vertex 429) would reveal the badges and then
+  // serve mock rows behind an animation that claimed we'd analysed the page. Now it holds until the
+  // real fetch settles, with LOADING_MS as a FLOOR so it never flashes, and a ceiling so a hung
+  // backend can't trap the user behind a permanent shimmer.
   //
   // If the answer is already cached (we've been on this screen before), skip the whole thing —
-  // re-running a 5s "Analyzing…" animation over data we already have is theatre, not feedback.
+  // re-running an "Analyzing…" animation over data we already have is theatre, not feedback.
   const alreadyCached = livePayload !== null
-  const MIN_SHIMMER_MS = 5000
   // Ceiling only, for a hung backend. It must be comfortably LONGER than a real call: a
   // `product_insights` request does live web searches and routinely runs past 20s. Set it too low
   // and the ceiling fires mid-flight, revealing the mock rows while the real answer is still on its
   // way — which is the exact failure this shimmer exists to prevent.
-  const MAX_SHIMMER_MS = 45000
   const [minShimmerDone, setMinShimmerDone] = useState(alreadyCached)
   const [insightsSettled, setInsightsSettled] = useState(alreadyCached)
   useEffect(() => {
     if (alreadyCached) return
-    const min = window.setTimeout(() => setMinShimmerDone(true), MIN_SHIMMER_MS)
-    const max = window.setTimeout(() => setInsightsSettled(true), MAX_SHIMMER_MS)
+    const min = window.setTimeout(() => setMinShimmerDone(true), LOADING_MS)
+    const max = window.setTimeout(() => setInsightsSettled(true), MAX_LOADING_MS)
     return () => {
       window.clearTimeout(min)
       window.clearTimeout(max)
@@ -1133,24 +1209,32 @@ export function ProductInsightsScreen() {
   }, [alreadyCached])
   const generating = !minShimmerDone || !insightsSettled
 
+  /** Any Connie card open? It gets the 10% scrim under it, and the page stops being clickable. */
+  const panelOpen = showRecommended || variant === 'notrec'
+
   const frame: ReactNode = (
     <FigmaFrame>
-      {/* Click anywhere on the retail page (behind the retail group / panels / launcher) to open
-          the inline-annotation experience — it starts with a short tooltip intro. */}
-      <button
-        aria-label="Highlight a claim on the page"
-        onClick={() => navigate(`${routes.annotations}?intro=1`)}
-        className="absolute inset-0 cursor-pointer"
-      />
+      {/* Click a product on the retail page to open its detail page, where the inline-annotation
+          experience lives. Only while no card is open — otherwise the scrim closes the card. */}
+      {!panelOpen && (
+        <button
+          aria-label="Open the product page"
+          onClick={() => navigate(routes.annotations)}
+          className="absolute inset-0 cursor-pointer"
+        />
+      )}
 
-      {/* Shared retail backdrop. While Connie "generates," a shimmer covers the products; the
-          chat + green-star badges appear once it finishes. */}
+      {/* Shared retail backdrop — full colour. While Connie "generates," a shimmer covers the
+          products; the chat + green-star badges appear once it finishes. */}
       <RetailBackdrop />
       {generating ? (
         <GeneratingOverlay />
       ) : (
         <ProductBadges onOpen={() => setVariant('recommended')} onOpenNotRec={openNotRec} />
       )}
+
+      {/* 10% scrim between the full-colour page and the card. */}
+      {panelOpen && <DimOverlay onClick={() => setVariant('collapsed')} />}
 
       {showRecommended && (
         <InsightPanel

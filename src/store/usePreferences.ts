@@ -7,21 +7,22 @@ import { create } from 'zustand'
  */
 const DEFAULT_PREFERENCES = ['Long-term reliability', 'Ease of use']
 /**
- * Communities connected during onboarding (N4a) — pre-selected to match the design, the same way
- * the two default preferences are. Deselecting or adding any community in onboarding is respected
- * everywhere (Sources popover, insight cards, annotations).
+ * Communities connected during onboarding (N4a). Deliberately EMPTY: which communities you trust
+ * is the shopper's answer to give, not ours to assume — nothing is pre-selected, and N4a's Next
+ * button stays disabled until at least one is picked.
+ *
+ * Whatever is picked here is respected everywhere (Sources popover, insight cards, annotations).
  * Consumer Reports is always implicit and shown separately.
  */
-const DEFAULT_SOURCES = ['Instagram', 'Reddit']
+const DEFAULT_SOURCES: string[] = []
 
 /** Everything offered in onboarding — also used by the editable "BASED ON" popover. */
 export const ALL_PREFERENCES = [
   'Long-term reliability',
-  'Value for money',
+  'Value for price',
   'Aesthetics',
   'Ease of use',
   'Sustainability',
-  'Brand ethics',
 ]
 export const ALL_COMMUNITIES = ['Instagram', 'Reddit', 'YouTube', 'Tiktok', 'Pinterest', 'Online blogs']
 

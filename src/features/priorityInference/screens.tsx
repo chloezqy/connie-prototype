@@ -1,191 +1,97 @@
 import { useEffect, useRef, useState } from 'react'
-import type { ReactNode } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { FigmaFrame } from '@/layouts/FigmaFrame'
-import { RetailBackdrop } from '@/components/connie/RetailBackdrop'
+import { ProductBackdrop } from '@/components/connie/RetailBackdrop'
+import { DimOverlay } from '@/components/connie/DimOverlay'
+import {
+  ChatPanel,
+  ChatChip,
+  ChatComposer,
+  ConnieGroup,
+  BotBubble,
+  ChipRow,
+  Turn,
+} from '@/components/connie/ChatPanel'
 import { routes } from '@/app/routes'
-import { callConnieCached, peekConnieCache } from '@/api/connieClient'
+import { callConnieCached } from '@/api/connieClient'
 import { isPriorityInference } from '@/types/connie-contract'
 import { NaviRail } from '@/components/connie/NaviRail'
 
 const DEFAULT_PRIORITIES = ['Safety', 'Durability', 'Easy Fold', 'Lightweight']
 
-/* Shared Amazon browse backdrop (dimmed 40% over white — matches Figma "Amazon bg"). */
-const bg = '/figma/prio-amazon-bg.png'
-
 /* ---------- Priority Inference asset paths (public/figma, prefix "prio-") ---------- */
 const asset = {
-  amazonBg: bg,
-  close: '/figma/prio-ic-close.svg',
-  send: '/figma/prio-ic-send.svg',
   softStar: '/figma/prio-softstar.svg',
   btnArrow: '/figma/prio-ic-btnarrow.svg',
   chevron: '/figma/prio-ic-chevron.svg',
   compass: '/figma/prio-ic-compass.svg',
   lightning: '/figma/prio-ic-lightning.svg',
-  // bento icons — dark (plain cards)
+  // priority icons — dark (plain rows)
   safety: '/figma/prio-ic-safety.svg',
   durability: '/figma/prio-ic-durability.svg',
   easyFold: '/figma/prio-ic-easyfold.svg',
   lightweight: '/figma/prio-ic-lightweight.svg',
-  // bento icons — white (green highlighted cards)
+  // priority icons — white (on the green "raised" rows)
   easyFoldW: '/figma/prio-ic-easyfold-w.svg',
   lightweightW: '/figma/prio-ic-lightweight-w.svg',
   // chip icons
   chipElevator: '/figma/prio-ic-chip-elevator.svg',
   chipNoElevator: '/figma/prio-ic-chip-noelevator.svg',
   chipHouse: '/figma/prio-ic-chip-house.svg',
-  // navi bar
-  navChat: '/figma/prio-nav-chat.svg',
-  navHeart: '/figma/prio-nav-heart.svg',
-  navLine: '/figma/prio-nav-line.svg',
-  navGear: '/figma/prio-nav-gear.svg',
-  navQuestion: '/figma/prio-nav-question.svg',
 }
 
-/* ---------- Shared primitives ---------- */
+/* ---------- Priority list ---------- */
 
-/** Connie "C" avatar (32px black circle). */
-function Avatar() {
-  return (
-    <div className="flex size-[32px] shrink-0 items-center justify-center rounded-full bg-fg-primary">
-      <span className="text-[12px] font-semibold leading-[16px] text-fg-inverse">C</span>
-    </div>
-  )
+/** Icon + sizing per priority label (live suggested_priorities map to these). */
+const PRIO_ICON: Record<string, { icon: string; white: string; w: number; h: number }> = {
+  Safety: { icon: asset.safety, white: asset.safety, w: 16, h: 20 },
+  Durability: { icon: asset.durability, white: asset.durability, w: 19.95, h: 21 },
+  'Easy Fold': { icon: asset.easyFold, white: asset.easyFoldW, w: 21.95, h: 21.95 },
+  Lightweight: { icon: asset.lightweight, white: asset.lightweightW, w: 19.8, h: 19.8 },
 }
 
-/** A chat message group: avatar + 402px content column (gap 16). */
-function Group({ children }: { children: ReactNode }) {
+/**
+ * One priority Connie is weighing.
+ *
+ * This used to be a bordered, numbered card in a 2×2 grid, which read as a set of buttons you
+ * were supposed to press and rank. It isn't — it's Connie telling you what it's currently
+ * weighing. So: a plain list row, icon + label, no box and no rank number. `raised` marks the
+ * ones Connie has just moved up, which is the only state worth calling out.
+ */
+function PriorityRow({ label, raised = false }: { label: string; raised?: boolean }) {
+  const m = PRIO_ICON[label] ?? { icon: asset.safety, white: asset.safety, w: 16, h: 20 }
   return (
-    <div className="flex w-full shrink-0 items-start gap-[12px]">
-      <Avatar />
-      <div className="flex w-[402px] flex-col items-start gap-[16px]">{children}</div>
-    </div>
-  )
-}
-
-/** Connie speech bubble (tertiary, tail on top-left). */
-function Bubble({ children }: { children: ReactNode }) {
-  return (
-    <div className="w-full shrink-0 rounded-bl-[12px] rounded-br-[12px] rounded-tr-[12px] bg-bg-tertiary p-[16px]">
-      <p className="text-[16px] leading-[24px] text-fg-primary">{children}</p>
-    </div>
-  )
-}
-
-/** "Connie is thinking…" — animated three-dot bubble shown after a selection. */
-function ThinkingBubble() {
-  return (
-    <div className="flex shrink-0 items-center gap-[8px] rounded-bl-[12px] rounded-br-[12px] rounded-tr-[12px] bg-bg-tertiary px-[16px] py-[18px]">
-      {[0, 1, 2].map((i) => (
-        <span
-          key={i}
-          className="size-[8px] animate-bounce rounded-full bg-fg-secondary"
-          style={{ animationDelay: `${i * 0.15}s` }}
-        />
-      ))}
-    </div>
-  )
-}
-
-type CardTone = 'plain' | 'strong' | 'green'
-
-/** A single priority bento card. */
-function BentoCard({
-  n,
-  label,
-  icon,
-  iconW,
-  iconH,
-  subtitle,
-  tone,
-  pad = 14,
-}: {
-  n: number
-  label: string
-  icon: string
-  iconW: number
-  iconH: number
-  subtitle?: string
-  tone: CardTone
-  pad?: number
-}) {
-  const green = tone === 'green'
-  const border =
-    tone === 'green'
-      ? 'border-2 border-border-brand'
-      : tone === 'strong'
-        ? 'border-2 border-border-black'
-        : 'border border-border-subtle'
-  return (
-    <div
-      className={`relative flex flex-col items-start rounded-[12px] ${green ? 'bg-bg-brand-muted' : 'bg-bg-primary'} ${border}`}
-      style={{ padding: pad }}
-    >
-      {green && (
-        <div className="absolute left-[147px] top-[-2px] flex h-[47.6px] w-[45.6px] items-center justify-center">
-          <div className="rotate-[-11.14deg]">
-            <img src={asset.softStar} alt="" className="h-[40.97px] w-[38.38px]" />
-          </div>
-        </div>
-      )}
-      <div className="relative flex w-full flex-col items-center gap-[8px]">
-        <div
-          className={`flex size-[40px] items-center justify-center rounded-full ${green ? 'bg-bg-brand' : 'bg-bg-tertiary'}`}
-        >
-          <img src={icon} alt="" style={{ width: iconW, height: iconH }} />
-        </div>
-        <p className="text-center text-[12px] font-semibold leading-[16px] tracking-[0.24px] text-fg-primary">
-          {label}
-        </p>
-        {subtitle && (
-          <p className="w-full text-center text-[9px] leading-[13.5px] text-fg-brand">{subtitle}</p>
-        )}
-        <div className="absolute left-[-4px] top-[-4px] flex size-[20px] items-center justify-center rounded-full border border-border-subtle bg-bg-tertiary p-px">
-          <span className="text-[10px] font-bold leading-[15px] text-fg-primary">{n}</span>
-        </div>
+    <div className="flex w-full items-center gap-[12px] py-[7px]">
+      <div
+        className={`flex size-[36px] shrink-0 items-center justify-center rounded-full ${
+          raised ? 'bg-bg-brand' : 'bg-bg-tertiary'
+        }`}
+      >
+        <img src={raised ? m.white : m.icon} alt="" style={{ width: m.w, height: m.h }} />
       </div>
-    </div>
-  )
-}
-
-/** 2×2 bento grid wrapper. */
-function Bento({ children }: { children: ReactNode }) {
-  return <div className="grid w-full shrink-0 grid-cols-2 items-start gap-[12px]">{children}</div>
-}
-
-/** A selectable option chip in a Connie question. */
-function Chip({
-  label,
-  icon,
-  selected,
-  onClick,
-}: {
-  label: string
-  icon?: string
-  selected?: boolean
-  onClick?: () => void
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`flex w-full items-center justify-between rounded-[8px] border p-[17px] text-left ${
-        selected ? 'border-border-brand bg-bg-brand' : 'border-border-subtle bg-bg-primary'
-      }`}
-    >
-      <span
-        className={`text-[12px] font-semibold leading-[16px] ${selected ? 'text-fg-inverse' : 'text-fg-primary'}`}
+      <p
+        className={`flex-1 text-[15px] leading-[22px] ${
+          raised ? 'font-semibold text-fg-brand' : 'text-fg-primary'
+        }`}
       >
         {label}
-      </span>
-      {icon && (
-        <img
-          src={icon}
-          alt=""
-          className={`size-[13.5px] ${selected ? '[filter:brightness(0)_invert(1)]' : ''}`}
-        />
+      </p>
+      {raised && (
+        <div className="relative flex size-[22px] shrink-0 items-center justify-center">
+          <img src={asset.softStar} alt="" className="size-[18px]" />
+        </div>
       )}
-    </button>
+    </div>
+  )
+}
+
+function PriorityList({ priorities, raised = [] }: { priorities: string[]; raised?: string[] }) {
+  return (
+    <div className="flex w-full shrink-0 flex-col rounded-[12px] bg-bg-primary px-[16px] py-[8px]">
+      {priorities.map((p) => (
+        <PriorityRow key={p} label={p} raised={raised.includes(p)} />
+      ))}
+    </div>
   )
 }
 
@@ -223,60 +129,6 @@ function ChoiceCard({
   )
 }
 
-/* ---------- Bento states ---------- */
-
-/** Icon + sizing per priority label (live suggested_priorities map to these). */
-const PRIO_ICON: Record<string, { icon: string; w: number; h: number }> = {
-  Safety: { icon: asset.safety, w: 16, h: 20 },
-  Durability: { icon: asset.durability, w: 19.95, h: 21 },
-  'Easy Fold': { icon: asset.easyFold, w: 21.95, h: 21.95 },
-  Lightweight: { icon: asset.lightweight, w: 19.8, h: 19.8 },
-}
-
-function BentoA({ priorities }: { priorities: string[] }) {
-  return (
-    <Bento>
-      {priorities.map((label, i) => {
-        const m = PRIO_ICON[label] ?? { icon: asset.safety, w: 16, h: 20 }
-        return (
-          <BentoCard
-            key={label}
-            n={i + 1}
-            label={label}
-            icon={m.icon}
-            iconW={m.w}
-            iconH={m.h}
-            tone="plain"
-            pad={13}
-          />
-        )
-      })}
-    </Bento>
-  )
-}
-
-function BentoB() {
-  return (
-    <Bento>
-      <BentoCard n={1} label="Lightweight" icon={asset.lightweightW} iconW={19.8} iconH={19.8} tone="green" subtitle="More important for your lifestyle" />
-      <BentoCard n={2} label="Safety" icon={asset.safety} iconW={16} iconH={20} tone="strong" />
-      <BentoCard n={3} label="Easy Fold" icon={asset.easyFold} iconW={21.95} iconH={21.95} tone="strong" />
-      <BentoCard n={4} label="Durability" icon={asset.durability} iconW={19.95} iconH={21} tone="strong" />
-    </Bento>
-  )
-}
-
-function BentoC() {
-  return (
-    <Bento>
-      <BentoCard n={1} label="Easy Fold" icon={asset.easyFoldW} iconW={21.95} iconH={21.95} tone="green" subtitle="Recommended based on your commute" />
-      <BentoCard n={2} label="Lightweight" icon={asset.lightweightW} iconW={19.8} iconH={19.8} tone="green" subtitle="More important for your lifestyle" />
-      <BentoCard n={3} label="Safety" icon={asset.safety} iconW={16} iconH={20} tone="strong" />
-      <BentoCard n={4} label="Durability" icon={asset.durability} iconW={19.95} iconH={21} tone="strong" />
-    </Bento>
-  )
-}
-
 /* ---------- Screen ---------- */
 
 export function PriorityInferenceScreen() {
@@ -285,7 +137,15 @@ export function PriorityInferenceScreen() {
   const raw = parseInt(params.get('step') || '1', 10)
   const initial = Number.isNaN(raw) ? 1 : Math.min(8, Math.max(1, raw))
   const [step, setStep] = useState(initial)
-  const scrollRef = useRef<HTMLDivElement>(null)
+  const [draft, setDraft] = useState('')
+
+  /**
+   * Which of Connie's turns have finished loading. Each turn's `when` is gated on the previous
+   * turn being done, so the thread loads one bubble at a time — Connie answers, *then* asks the
+   * next question, the way a conversation actually goes.
+   */
+  const [said, setSaid] = useState<Record<string, boolean>>({})
+  const mark = (k: string) => () => setSaid((s) => (s[k] ? s : { ...s, [k]: true }))
 
   // Fetch Connie's inferred starting priorities once (guard against StrictMode double-invoke).
   const [liveIntro, setLiveIntro] = useState<string | null>(null)
@@ -315,22 +175,15 @@ export function PriorityInferenceScreen() {
     setParams({ step: String(c) }, { replace: true })
   }
 
-  // After a selection, show a "thinking…" bubble for ~5s before revealing the next content.
-  const [thinking, setThinking] = useState(false)
-
-  // Chat auto-scrolls to the newest content (matches each Figma scroll position).
-  useEffect(() => {
-    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight
-  }, [step, thinking])
-
+  /** The suggested actions now live in the composer's placeholder, not in a row of pills. */
   const placeholder =
     step >= 7
-      ? 'Ask Connie...'
+      ? 'Reorder priorities, add another, or ask Connie anything…'
       : step >= 4
         ? 'None of these? Tell me about your commute.'
         : step >= 2
           ? 'None of these? Tell me about your living situation.'
-          : 'Ask Connie anything...'
+          : 'Ask Connie anything…'
 
   // Which answer the user picked for each question (drives the chip highlight).
   const [chosenLiving, setChosenLiving] = useState<string | null>(
@@ -339,57 +192,34 @@ export function PriorityInferenceScreen() {
   const [chosenCommute, setChosenCommute] = useState<string | null>(
     initial >= 7 ? 'Mostly public transit' : null,
   )
-  // On selection: highlight the chip immediately, show the thinking bubble, then reveal next.
-  const timerRef = useRef<number | null>(null)
-  useEffect(() => () => { if (timerRef.current) window.clearTimeout(timerRef.current) }, [])
-  const answerAfter = (n: number) => {
-    setThinking(true)
-    if (timerRef.current) window.clearTimeout(timerRef.current)
-    timerRef.current = window.setTimeout(() => {
-      setThinking(false)
-      go(n)
-    }, 5000)
-  }
   const answerLiving = (label: string) => {
     setChosenLiving(label)
-    answerAfter(4)
+    go(4)
   }
   const answerCommute = (label: string) => {
     setChosenCommute(label)
-    answerAfter(7)
+    go(7)
   }
 
   return (
     <FigmaFrame>
-      <RetailBackdrop />
-      {/* Aside — Floating Bubble Panel (right, 16px inset, full height) */}
-      <div
-        className="absolute flex flex-col items-start overflow-clip rounded-[16px] border border-border-subtle bg-bg-secondary p-px shadow-panel"
-        style={{ right: 16, top: 16, width: 520, height: 868 }}
-      >
-        {/* Brand Header */}
-        <div className="flex w-full shrink-0 items-center justify-between border-b border-border-subtle bg-bg-secondary px-[24px] pb-[9px] pt-[8px]">
-          <p className="text-[16px] font-semibold leading-[24px] text-fg-primary">Connie</p>
-          <button
-            aria-label="Close"
-            onClick={() => navigate(routes.insights)}
-            className="flex size-[40px] items-center justify-center rounded-full"
-          >
-            <img src={asset.close} alt="" className="size-[14px]" />
-          </button>
-        </div>
+      {/* The product page she came from, at full colour, unchanged from here on. */}
+      <ProductBackdrop />
+      <DimOverlay onClick={() => navigate(routes.annotations)} />
 
-        {/* Main Content Area — scrollable chat */}
-        <div
-          ref={scrollRef}
-          className="flex min-h-0 w-full flex-1 flex-col items-start gap-[30px] overflow-auto bg-bg-secondary px-[36px] pb-[24px] pt-[20px]"
-        >
-          {step === 1 ? (
-            <Group>
-              <Bubble>
+      <ChatPanel
+        onClose={() => navigate(routes.annotations)}
+        composer={
+          <ChatComposer value={draft} onChange={setDraft} onSend={() => setDraft('')} placeholder={placeholder} />
+        }
+      >
+        {step === 1 ? (
+          <Turn key="start" when>
+            <ConnieGroup>
+              <BotBubble>
                 Shopping for a stroller? I can figure out what fits your life or take you straight to
                 the top picks.
-              </Bubble>
+              </BotBubble>
               <ChoiceCard
                 icon={asset.compass}
                 iconBg="#daede0"
@@ -404,168 +234,117 @@ export function PriorityInferenceScreen() {
                 sub="Connie's best picks, ranked"
                 onClick={() => navigate(routes.decision)}
               />
-            </Group>
-          ) : (
-            <>
-              <Group>
-                <Bubble>
+            </ConnieGroup>
+          </Turn>
+        ) : (
+          <>
+            <Turn key="intro" when onDone={mark('intro')}>
+              <ConnieGroup>
+                <BotBubble>
                   {liveIntro ??
                     "Since you're shopping for a stroller, I've started with the priorities most parents care about. These are just a starting point — I'll tailor them to your situation."}
-                </Bubble>
-                <BentoA priorities={priorities} />
-              </Group>
+                </BotBubble>
+                <PriorityList priorities={priorities} />
+              </ConnieGroup>
+            </Turn>
 
-              <Group>
-                <Bubble>
+            <Turn key="living" when={!!said.intro} onDone={mark('living')}>
+              <ConnieGroup>
+                <BotBubble>
                   To help narrow the best options, do you live in an apartment or a house?
-                </Bubble>
-                <div className="flex w-full flex-col items-start gap-[8px]">
-                  <Chip
+                </BotBubble>
+                <ChipRow>
+                  <ChatChip
                     label="Apartment with elevator"
-                    icon={asset.chipElevator}
-                    selected={chosenLiving === 'Apartment with elevator'}
+                    icon={<img src={asset.chipElevator} alt="" className="size-[14px]" />}
+                    state={chosenLiving === 'Apartment with elevator' ? 'selected' : 'default'}
                     onClick={() => answerLiving('Apartment with elevator')}
                   />
-                  <Chip
+                  <ChatChip
                     label="Apartment without elevator"
-                    icon={asset.chipNoElevator}
-                    selected={chosenLiving === 'Apartment without elevator'}
+                    icon={<img src={asset.chipNoElevator} alt="" className="size-[14px]" />}
+                    state={chosenLiving === 'Apartment without elevator' ? 'selected' : 'default'}
                     onClick={() => answerLiving('Apartment without elevator')}
                   />
-                  <Chip
+                  <ChatChip
                     label="House"
-                    icon={asset.chipHouse}
-                    selected={chosenLiving === 'House'}
+                    icon={<img src={asset.chipHouse} alt="" className="size-[14px]" />}
+                    state={chosenLiving === 'House' ? 'selected' : 'default'}
                     onClick={() => answerLiving('House')}
                   />
-                </div>
-              </Group>
+                </ChipRow>
+              </ConnieGroup>
+            </Turn>
 
-              {step >= 4 && (
-                <Group>
-                  <Bubble>
-                    Good to know! Since you'll be carrying your stroller up stairs, we'll prioritize
-                    lightweight options.
-                  </Bubble>
-                  <BentoB />
-                </Group>
-              )}
+            <Turn key="lightweight" when={step >= 4 && !!said.living} onDone={mark('lightweight')}>
+              <ConnieGroup>
+                <BotBubble>
+                  Good to know! Since you'll be carrying your stroller up stairs, we'll prioritize
+                  lightweight options.
+                </BotBubble>
+                <PriorityList
+                  priorities={['Lightweight', 'Safety', 'Easy Fold', 'Durability']}
+                  raised={['Lightweight']}
+                />
+              </ConnieGroup>
+            </Turn>
 
-              {step >= 4 && (
-                <Group>
-                  <Bubble>
-                    Which best describes how you'll usually travel with your stroller?
-                  </Bubble>
-                  <div className="flex w-full flex-col items-start gap-[8px]">
-                    <Chip
-                      label="Mostly by car"
-                      selected={chosenCommute === 'Mostly by car'}
-                      onClick={() => answerCommute('Mostly by car')}
+            <Turn key="commute" when={step >= 4 && !!said.lightweight} onDone={mark('commute')}>
+              <ConnieGroup>
+                <BotBubble>Which best describes how you'll usually travel with your stroller?</BotBubble>
+                <ChipRow>
+                  {['Mostly by car', 'Mostly public transit', 'Mostly walking'].map((label) => (
+                    <ChatChip
+                      key={label}
+                      label={label}
+                      state={chosenCommute === label ? 'selected' : 'default'}
+                      onClick={() => answerCommute(label)}
                     />
-                    <Chip
-                      label="Mostly public transit"
-                      selected={chosenCommute === 'Mostly public transit'}
-                      onClick={() => answerCommute('Mostly public transit')}
-                    />
-                    <Chip
-                      label="Mostly walking"
-                      selected={chosenCommute === 'Mostly walking'}
-                      onClick={() => answerCommute('Mostly walking')}
-                    />
-                  </div>
-                </Group>
-              )}
+                  ))}
+                </ChipRow>
+              </ConnieGroup>
+            </Turn>
 
-              {step >= 7 && (
-                <Group>
-                  <Bubble>
-                    Got it! We'll prioritize strollers that are lightweight and easy to fold for
-                    trips on public transit.
-                  </Bubble>
-                  <BentoC />
-                </Group>
-              )}
+            <Turn key="fold" when={step >= 7 && !!said.commute} onDone={mark('fold')}>
+              <ConnieGroup>
+                <BotBubble>
+                  Got it! We'll prioritize strollers that are lightweight and easy to fold for trips
+                  on public transit.
+                </BotBubble>
+                <PriorityList
+                  priorities={['Easy Fold', 'Lightweight', 'Safety', 'Durability']}
+                  raised={['Easy Fold', 'Lightweight']}
+                />
+              </ConnieGroup>
+            </Turn>
 
-              {step >= 7 && (
-                <Group>
-                  <Bubble>
-                    <>
-                      Thanks! Based on your answers, we've increased the priority of{' '}
-                      <span className="font-semibold">Easy Fold</span> and{' '}
-                      <span className="font-semibold">Lightweight</span> while still considering all
-                      four priorities in your recommendations. This narrows your matches from 24
-                      highly rated strollers to 11. You can reorder or add priorities anytime.
-                    </>
-                  </Bubble>
-                  <button
-                    onClick={() => navigate(routes.decision)}
-                    className="flex h-[48px] w-full items-center justify-center gap-[8px] rounded-[24px] bg-bg-brand"
-                  >
-                    <span className="text-[16px] leading-[24px] text-fg-inverse">
-                      Find my best matches
-                    </span>
-                    <img src={asset.btnArrow} alt="" className="size-[16px]" />
-                  </button>
-                </Group>
-              )}
-
-              {thinking && (
-                <Group>
-                  <ThinkingBubble />
-                </Group>
-              )}
-            </>
-          )}
-        </div>
-
-        {/* Suggested-action pills (final step only) */}
-        {step >= 7 && (
-          <div className="flex h-[57px] w-full shrink-0 flex-wrap content-start items-start gap-[9px] overflow-clip pl-[16px]">
-            <div className="flex items-center justify-center overflow-clip rounded-[999px] border-[1.5px] border-fg-secondary bg-white px-[18px] py-[11px]">
-              <span className="whitespace-nowrap text-[16px] leading-[24px] text-fg-primary">
-                Reorder priorities
-              </span>
-            </div>
-            <div className="flex items-center justify-center overflow-clip rounded-[999px] border-[1.5px] border-fg-secondary bg-white px-[18px] py-[11px]">
-              <span className="whitespace-nowrap text-[16px] leading-[24px] text-fg-primary">
-                Add another priority
-              </span>
-            </div>
-          </div>
+            <Turn key="matches" when={step >= 7 && !!said.fold}>
+              <ConnieGroup>
+                <BotBubble>
+                  <>
+                    Thanks! Based on your answers, we've increased the priority of{' '}
+                    <span className="font-semibold">Easy Fold</span> and{' '}
+                    <span className="font-semibold">Lightweight</span> while still considering all
+                    four priorities in your recommendations. This narrows your matches from 24
+                    highly rated strollers to 11. You can reorder or add priorities anytime.
+                  </>
+                </BotBubble>
+                <button
+                  onClick={() => navigate(routes.decision)}
+                  className="flex h-[48px] w-full items-center justify-center gap-[8px] rounded-[24px] bg-brand"
+                >
+                  <span className="text-[16px] font-semibold leading-[24px] text-fg-inverse">
+                    Find my best matches
+                  </span>
+                  <img src={asset.btnArrow} alt="" className="size-[16px]" />
+                </button>
+              </ConnieGroup>
+            </Turn>
+          </>
         )}
+      </ChatPanel>
 
-        {/* Footer — Bottom Chat Input */}
-        <div className="w-full shrink-0 border-t border-border-subtle bg-bg-primary px-[16px] pb-[20px] pt-[21px]">
-          <div className="relative w-full">
-            <div className="flex w-full flex-col items-start overflow-clip rounded-[8px] border border-border-subtle bg-bg-secondary px-[17px] pb-[15px] pt-[14px]">
-              <p className="text-[14px] leading-[20px] text-fg-secondary">{placeholder}</p>
-            </div>
-            <div className="absolute right-[8px] top-[7px] flex size-[31px] items-center justify-center rounded-[8px] bg-fg-primary p-[8px] opacity-90">
-              <img src={asset.send} alt="" className="h-[9.333px] w-[11.083px]" />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Floating Navi bar launcher */}
       <NaviRail active="chat" />
-
-      {/* Step controls (prototype) */}
-      <div className="absolute bottom-[16px] left-[16px] z-10 flex items-center gap-[8px]">
-        <button
-          onClick={() => go(step - 1)}
-          className="flex size-[32px] items-center justify-center rounded-full border border-border-subtle bg-white/90 text-fg-primary shadow-subtle"
-        >
-          ‹
-        </button>
-        <span className="text-[12px] text-fg-secondary">{step} / 8</span>
-        <button
-          onClick={() => go(step + 1)}
-          className="flex size-[32px] items-center justify-center rounded-full border border-border-subtle bg-white/90 text-fg-primary shadow-subtle"
-        >
-          ›
-        </button>
-      </div>
     </FigmaFrame>
   )
 }

@@ -4,6 +4,8 @@ import { FlowMenu } from '@/features/home/FlowMenu'
 import { Gallery } from '@/features/ds/Gallery'
 import {
   InstallScreen,
+  SearchScreen,
+  ResultsScreen,
   WelcomeScreen,
   MemberCheckScreen,
   LoginScreen,
@@ -29,6 +31,8 @@ export const router = createBrowserRouter([
   { path: '/navigation', element: <FlowMenu /> },
 
   { path: routes.install, element: <InstallScreen /> },
+  { path: routes.search, element: <SearchScreen /> },
+  { path: routes.results, element: <ResultsScreen /> },
   { path: routes.welcome, element: <WelcomeScreen /> },
   { path: routes.memberCheck, element: <MemberCheckScreen /> },
   { path: routes.login, element: <LoginScreen /> },
@@ -38,7 +42,7 @@ export const router = createBrowserRouter([
   { path: routes.permissions, element: <PermissionsScreen /> },
   { path: routes.done, element: <DoneScreen /> },
 
-  { path: '/browse/tour', element: <TourScreen /> },
+  { path: routes.tour, element: <TourScreen /> },
   { path: routes.insights, element: <ProductInsightsScreen /> },
   { path: routes.annotations, element: <AnnotationsScreen /> },
   { path: routes.priorities, element: <PriorityInferenceScreen /> },

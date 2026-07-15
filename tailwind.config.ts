@@ -84,6 +84,16 @@ export default {
         panel: 'var(--shadow-panel)',
         sunken: 'var(--shadow-sunken)',
       },
+      keyframes: {
+        /** Pans a wide gradient across its box — the "Connie is listening" shimmer. */
+        'gradient-pan': {
+          '0%, 100%': { backgroundPosition: '0% 50%' },
+          '50%': { backgroundPosition: '100% 50%' },
+        },
+      },
+      animation: {
+        'gradient-pan': 'gradient-pan 4s ease-in-out infinite',
+      },
     },
   },
   plugins: [],
