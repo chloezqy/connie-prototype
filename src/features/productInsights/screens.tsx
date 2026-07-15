@@ -1207,16 +1207,23 @@ export function ProductInsightsScreen() {
   const notRecLive = notRecPayload ? insightsToRows(notRecPayload, sources) : null
   const notRecPanelRows = notRecLive && notRecLive.length > 0 ? notRecLive : notRecRows
 
-  // The 5s "Analyzing…" beat also plays every time a NOT RECOMMENDED card is opened — even when its
-  // data is already warmed — so it matches the recommended card's reveal instead of popping open.
+  // The 5s "Analyzing…" beat plays the FIRST time each NOT RECOMMENDED card is opened, then never
+  // again — so reopening a card you've already seen shows its data instantly, exactly like the
+  // recommended card. `notRecShown` remembers which slots have already played their beat.
+  const notRecShown = useRef<Set<NotRecSlot>>(new Set())
   const [notRecMinDone, setNotRecMinDone] = useState<Partial<Record<NotRecSlot, boolean>>>({})
   useEffect(() => {
     if (variant !== 'notrec') return
+    if (notRecShown.current.has(notRecSlot)) {
+      // Already revealed once — skip the beat, show the retained data immediately.
+      setNotRecMinDone((prev) => ({ ...prev, [notRecSlot]: true }))
+      return
+    }
     setNotRecMinDone((prev) => ({ ...prev, [notRecSlot]: false }))
-    const t = window.setTimeout(
-      () => setNotRecMinDone((prev) => ({ ...prev, [notRecSlot]: true })),
-      LOADING_MS,
-    )
+    const t = window.setTimeout(() => {
+      setNotRecMinDone((prev) => ({ ...prev, [notRecSlot]: true }))
+      notRecShown.current.add(notRecSlot) // don't replay the beat on future opens
+    }, LOADING_MS)
     return () => window.clearTimeout(t)
   }, [variant, notRecSlot])
 
