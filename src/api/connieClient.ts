@@ -203,8 +203,53 @@ function extractMessageText(payload: unknown): string {
 }
 
 /**
- * Parse Connie's text into a typed ConnieResponse.
- * The prompt tells the agent to return pure JSON, but we strip stray ```json fences defensively.
+ * Scan text for every top-level `{...}` block, respecting string literals so braces inside quotes
+ * don't throw off the depth count. Returns the raw substrings, in order.
+ *
+ * The agent is supposed to return one bare JSON object, but a freshly-imported / untuned flow will
+ * sometimes wrap it in ```json fences, prepend prose, or emit two objects (e.g. a `chat` block AND
+ * the real structured block). This lets us recover the usable object instead of throwing.
+ */
+function extractJsonObjects(text: string): string[] {
+  const objects: string[] = [];
+  let depth = 0;
+  let start = -1;
+  let inString = false;
+  let escaped = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (ch === '\\') escaped = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') inString = true;
+    else if (ch === '{') {
+      if (depth === 0) start = i;
+      depth++;
+    } else if (ch === '}') {
+      depth--;
+      if (depth === 0 && start !== -1) {
+        objects.push(text.slice(start, i + 1));
+        start = -1;
+      }
+    }
+  }
+  return objects;
+}
+
+function isConnieResponse(o: unknown): o is ConnieResponse {
+  return !!o && typeof o === 'object' && 'response_type' in o;
+}
+
+/**
+ * Parse Connie's text into a typed ConnieResponse — tolerant of the agent's formatting quirks.
+ *
+ * Strategy: try the clean case first (one bare object). If that fails, pull out every JSON object
+ * in the text and pick the best one. When the agent emits both a `chat` block and a structured
+ * block, we prefer the structured one — that's the answer the screen actually wants; the chat block
+ * is just the model thinking out loud.
  */
 export function parseConnieResponse(raw: string): ConnieResponse {
   const cleaned = raw
@@ -213,15 +258,28 @@ export function parseConnieResponse(raw: string): ConnieResponse {
     .replace(/\s*```$/i, '')
     .trim();
 
-  let obj: unknown;
+  // Fast path: a single clean object.
   try {
-    obj = JSON.parse(cleaned);
+    const obj = JSON.parse(cleaned);
+    if (isConnieResponse(obj)) return obj as ConnieResponse;
   } catch {
-    throw new Error('Connie did not return valid JSON: ' + cleaned.slice(0, 400));
+    /* fall through to lenient extraction */
   }
 
-  if (!obj || typeof obj !== 'object' || !('response_type' in obj)) {
-    throw new Error('Connie JSON missing response_type: ' + cleaned.slice(0, 400));
+  // Lenient path: parse every {...} block, keep the valid ConnieResponses.
+  const candidates: ConnieResponse[] = [];
+  for (const block of extractJsonObjects(cleaned)) {
+    try {
+      const obj = JSON.parse(block);
+      if (isConnieResponse(obj)) candidates.push(obj as ConnieResponse);
+    } catch {
+      /* skip an unparseable block */
+    }
   }
-  return obj as ConnieResponse;
+
+  if (candidates.length === 0) {
+    throw new Error('Connie did not return valid JSON: ' + cleaned.slice(0, 400));
+  }
+  // Prefer a substantive response over a bare `chat` block if the agent emitted both.
+  return candidates.find((c) => c.response_type !== 'chat') ?? candidates[0];
 }

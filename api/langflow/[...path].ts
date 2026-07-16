@@ -21,7 +21,9 @@
  * Note: these have NO `VITE_` prefix on purpose — that keeps them server-side only.
  */
 
-export const config = { runtime: 'nodejs' };
+// No `export const config` runtime override — the default Node runtime is what we want. An invalid
+// runtime string (e.g. 'nodejs' instead of 'nodejs20.x') makes Vercel silently skip the function,
+// which surfaces as a 404 on every /api/langflow/* path.
 
 export default async function handler(req: any, res: any) {
   const LANGFLOW_URL = process.env.LANGFLOW_URL;

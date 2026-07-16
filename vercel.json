@@ -1,7 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
-    { "source": "/langflow/(.*)", "destination": "/api/langflow/$1" },
-    { "source": "/((?!api/).*)", "destination": "/index.html" }
+    { "source": "/langflow/:path*", "destination": "http://34.70.72.51:7860/:path*" },
+    { "source": "/((?!langflow/).*)", "destination": "/index.html" }
   ]
 }

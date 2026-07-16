@@ -39,8 +39,10 @@ function Stars({ rating }: { rating: number }) {
   )
 }
 
-/** The page's marketing claims. The comfort one is what CR's testers disagree with. */
-const ABOUT_BULLETS: { lead: string; rest: string }[] = [
+/** The page's marketing claims. The fold one is what CR's lab data contradicts (CR: 2-step,
+ *  two-handed, bulky). Exported so the annotations screen can send these exact claims to the agent
+ *  to verify — otherwise the agent has nothing concrete to check and just asks for them. */
+export const ABOUT_BULLETS: { lead: string; rest: string }[] = [
   {
     lead: '6 WAYS TO RIDE:',
     rest: 'Modular travel system converts between six configurations — infant car seat, pramette, toddler seat, and more — so it grows with your child from day one.',

@@ -1165,49 +1165,73 @@ export function ProductInsightsScreen() {
     }
     return seed
   })
+  // Fetch BOTH not-recommended products in the background on mount — not lazily on click. The
+  // recommended card already fetches on mount, which is why it feels ready and the grey cards did
+  // not: nothing happened for them until the badge was clicked. Now they load alongside it, so by
+  // the time a grey badge is clicked its data is already in flight or done. Staggered a few seconds
+  // apart so all three product_insights calls don't fire simultaneously and trip the Vertex quota.
   useEffect(() => {
-    if (variant !== 'notrec') return
-    const key = `${notRecSlot}|${priorityKey}`
-    if (notRecFetched.current.has(key)) return
-    notRecFetched.current.add(key)
-    setNotRecSettled((prev) => ({ ...prev, [notRecSlot]: false }))
-    // Same ceiling as the recommended card — long enough not to fire during a normal call.
-    const cap = window.setTimeout(
-      () => setNotRecSettled((prev) => ({ ...prev, [notRecSlot]: true })),
-      MAX_LOADING_MS,
-    )
-    callConnieCached({
-      message: `What are the key insights on the ${NOT_REC_PRODUCTS[notRecSlot].name}?`,
-      priorities: priorityKey || undefined,
+    const timers: number[] = []
+    NOT_REC_SLOTS.forEach((slot, i) => {
+      const key = `${slot}|${priorityKey}`
+      if (notRecFetched.current.has(key)) return
+      notRecFetched.current.add(key)
+      timers.push(
+        window.setTimeout(
+          () => {
+            callConnieCached({
+              message: `What are the key insights on the ${NOT_REC_PRODUCTS[slot].name}?`,
+              priorities: priorityKey || undefined,
+            })
+              .then((r) => {
+                if (isProductInsights(r) && r.product_insights.insights.length > 0) {
+                  setNotRecPayloads((prev) => ({ ...prev, [slot]: r.product_insights }))
+                } else {
+                  console.warn(
+                    `[Connie] NOT RECOMMENDED (${slot}) fell back to mock rows: backend returned`,
+                    r,
+                  )
+                }
+              })
+              .catch((err) => {
+                console.warn(`[Connie] NOT RECOMMENDED (${slot}) fetch failed, showing mock:`, err)
+              })
+              // Settled either way: live data replaces the shimmer, a failure falls back to mock.
+              .finally(() => setNotRecSettled((prev) => ({ ...prev, [slot]: true })))
+          },
+          // Recommended fetches at mount (0s); offset the grey cards so the three don't stack.
+          4000 * (i + 1),
+        ),
+      )
     })
-      .then((r) => {
-        if (isProductInsights(r) && r.product_insights.insights.length > 0) {
-          setNotRecPayloads((prev) => ({ ...prev, [notRecSlot]: r.product_insights }))
-        } else {
-          // Wrong response_type, or zero insights — the panel will silently show baked rows,
-          // which look plausible enough to be mistaken for live data. Say so.
-          console.warn(
-            `[Connie] NOT RECOMMENDED (${notRecSlot}) fell back to mock rows: backend returned`,
-            r,
-          )
-        }
-      })
-      .catch((err) => {
-        // Keep baked rows, but never fail silently — a 429 from the Vertex quota looks exactly
-        // like "the mock was always there" otherwise.
-        console.warn(`[Connie] NOT RECOMMENDED (${notRecSlot}) fetch failed, showing mock:`, err)
-      })
-      // Settled either way: live data replaces the shimmer, a failure falls back to mock rows.
-      .finally(() => {
-        window.clearTimeout(cap)
-        setNotRecSettled((prev) => ({ ...prev, [notRecSlot]: true }))
-      })
-  }, [variant, notRecSlot, priorityKey])
+    return () => timers.forEach((t) => window.clearTimeout(t))
+  }, [priorityKey])
   const notRecPayload = notRecPayloads[notRecSlot] ?? null
   const notRecLive = notRecPayload ? insightsToRows(notRecPayload, sources) : null
   const notRecPanelRows = notRecLive && notRecLive.length > 0 ? notRecLive : notRecRows
-  /** Shimmer until this badge's fetch settles. Reopening an already-fetched card is instant. */
-  const notRecLoading = notRecSettled[notRecSlot] !== true
+
+  // The 5s "Analyzing…" beat plays the FIRST time each NOT RECOMMENDED card is opened, then never
+  // again — so reopening a card you've already seen shows its data instantly, exactly like the
+  // recommended card. `notRecShown` remembers which slots have already played their beat.
+  const notRecShown = useRef<Set<NotRecSlot>>(new Set())
+  const [notRecMinDone, setNotRecMinDone] = useState<Partial<Record<NotRecSlot, boolean>>>({})
+  useEffect(() => {
+    if (variant !== 'notrec') return
+    if (notRecShown.current.has(notRecSlot)) {
+      // Already revealed once — skip the beat, show the retained data immediately.
+      setNotRecMinDone((prev) => ({ ...prev, [notRecSlot]: true }))
+      return
+    }
+    setNotRecMinDone((prev) => ({ ...prev, [notRecSlot]: false }))
+    const t = window.setTimeout(() => {
+      setNotRecMinDone((prev) => ({ ...prev, [notRecSlot]: true }))
+      notRecShown.current.add(notRecSlot) // don't replay the beat on future opens
+    }, LOADING_MS)
+    return () => window.clearTimeout(t)
+  }, [variant, notRecSlot])
+
+  /** Shimmer until BOTH the 5s beat has played AND this badge's fetch has settled. */
+  const notRecLoading = !(notRecSettled[notRecSlot] === true && notRecMinDone[notRecSlot] === true)
 
   // "Generating insights" shimmer over the product images, before the badges appear.
   //
@@ -1217,22 +1241,28 @@ export function ProductInsightsScreen() {
   // real fetch settles, with LOADING_MS as a FLOOR so it never flashes, and a ceiling so a hung
   // backend can't trap the user behind a permanent shimmer.
   //
-  // If the answer is already cached (we've been on this screen before), skip the whole thing —
-  // re-running an "Analyzing…" animation over data we already have is theatre, not feedback.
+  // The "Analyzing…" beat ALWAYS plays for LOADING_MS, even when the answer is already cached from
+  // the demo warm — that 5-second moment is the signature of the product, and skipping it (just
+  // because data is ready) makes the reveal feel like a page that didn't do anything.
+  //
+  //   minShimmerDone  = the 5s floor. Always runs.
+  //   insightsSettled = data is ready. TRUE immediately if warmed/cached; otherwise set when the
+  //                     fetch finishes, with MAX_LOADING_MS as a hung-backend ceiling.
+  //
+  // The overlay clears only when BOTH are true, so:
+  //   • warmed  → 5s of "Analyzing…", then the real data appears (the experience you want)
+  //   • cold    → shimmer holds until the data actually lands (never mock-then-swap)
   const alreadyCached = livePayload !== null
-  // Ceiling only, for a hung backend. It must be comfortably LONGER than a real call: a
-  // `product_insights` request does live web searches and routinely runs past 20s. Set it too low
-  // and the ceiling fires mid-flight, revealing the mock rows while the real answer is still on its
-  // way — which is the exact failure this shimmer exists to prevent.
-  const [minShimmerDone, setMinShimmerDone] = useState(alreadyCached)
+  const [minShimmerDone, setMinShimmerDone] = useState(false)
   const [insightsSettled, setInsightsSettled] = useState(alreadyCached)
   useEffect(() => {
-    if (alreadyCached) return
     const min = window.setTimeout(() => setMinShimmerDone(true), LOADING_MS)
-    const max = window.setTimeout(() => setInsightsSettled(true), MAX_LOADING_MS)
+    const max = alreadyCached
+      ? undefined
+      : window.setTimeout(() => setInsightsSettled(true), MAX_LOADING_MS)
     return () => {
       window.clearTimeout(min)
-      window.clearTimeout(max)
+      if (max) window.clearTimeout(max)
     }
   }, [alreadyCached])
   const generating = !minShimmerDone || !insightsSettled
