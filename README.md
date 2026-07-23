@@ -24,7 +24,7 @@ plus a working tool-calling agent backend that replaces the mock copy with live 
 
 | | Link | What it is |
 |---|---|---|
-| **Design** | [Figma — Discovery Prototype](https://www.figma.com/design/7NaKwiTiD1PeEsFwZgjMPt/Discovery-Prototype?node-id=667-44663&p=f&t=s97XBGV6thTAnMvI-0) | Design iterations. The source of truth for every screen. |
+| **Design** | [Connie Design Handoff (Figma)](https://www.figma.com/design/5NHRYHIKZpJ2TIQHZkHB8K/Connie---Design-Handoff?node-id=0-1&t=SrehqEKZeJcZcPZd-1) | **Design handoff** with all screens and components. |
 | **Frontend** | https://connie-prototype.vercel.app | The full clickable flow on **mock data**. No backend needed, always up. |
 | **Backend** | https://connie-prototype-theta.vercel.app | The **fully functional** build — a tool-calling agent returning live CR + web data. |
 
